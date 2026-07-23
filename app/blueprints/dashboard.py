@@ -3,12 +3,28 @@ from __future__ import annotations
 
 from flask import Blueprint, render_template
 
-from ..models import Transaction, NetWorthSnapshot
-from ..money import ZERO, money
+from ..models import Transaction
+from ..money import money
 from ..timeutil import today_ist, month_start
-from ..services import accounts, budget as budget_svc
+from ..services import accounts, budget as budget_svc, networth as nw_svc
 
 bp = Blueprint("dashboard", __name__)
+
+
+def _networth_spark(current, today):
+    """Trend of the last 30 snapshots, ending on today's live value.
+
+    Snapshots only exist from 23:00 each day, so the final point is pinned to
+    the live total — otherwise the sparkline would contradict the figure
+    printed directly above it.
+    """
+    snaps = nw_svc.snapshot_series(30)
+    points = [float(money(s.total)) for s in snaps]
+    if snaps and snaps[-1].date == today:
+        points[-1] = float(current)
+    else:
+        points.append(float(current))
+    return points
 
 
 def _summary_context():
@@ -16,9 +32,12 @@ def _summary_context():
     month = month_start(today)
     b = budget_svc.compute_budget(month)
     spent = money(b["total_spent"] + b["unbudgeted"])
-    snaps = NetWorthSnapshot.query.order_by(NetWorthSnapshot.date.asc()).all()
-    networth = snaps[-1].total if snaps else ZERO
-    spark = [float(money(s.total)) for s in snaps[-30:]]
+    # Value net worth live, the same way /networth/ does. Reading the most
+    # recent snapshot here made the two pages disagree by whatever had changed
+    # since the previous 23:00 job — and showed zero outright on a database
+    # that had no snapshots yet.
+    networth = nw_svc.current_total()
+    spark = _networth_spark(networth, today)
     return {
         "available": accounts.available_total(),
         "income": b["income_received"], "spent": spent,
