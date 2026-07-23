@@ -1,0 +1,8 @@
+.venv/
+__pycache__/
+*.pyc
+instance/
+*.db
+tools/tailwindcss.exe
+.pytest_cache/
+.DS_Store

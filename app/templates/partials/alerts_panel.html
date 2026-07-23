@@ -1,0 +1,36 @@
+<div class="max-h-96 overflow-y-auto">
+  <div class="flex items-center justify-between px-4 py-3 border-b border-line">
+    <span class="font-medium text-sm">Alerts</span>
+    {% if alerts %}
+      <button class="text-xs text-primary hover:underline"
+              hx-post="{{ url_for('api.alerts_read_all') }}" hx-target="#alert-panel">Mark all read</button>
+    {% endif %}
+  </div>
+  {% if not alerts %}
+    <div class="px-4 py-8 text-center muted text-sm">You're all caught up. 🌿</div>
+  {% else %}
+    <ul class="divide-y divide-line">
+      {% for a in alerts %}
+        <li class="px-4 py-3 flex items-start gap-3 {{ 'opacity-60' if a.is_read }}">
+          <span class="mt-0.5">
+            {{ {'overshoot':'🔴','recurring':'🔁','maturity':'⏰','reminder':'🔔','info':'ℹ️'}.get(a.type, 'ℹ️') }}
+          </span>
+          <div class="min-w-0 flex-1">
+            <p class="text-sm leading-snug">{{ a.message }}</p>
+            {% if a.due_date %}<p class="text-xs muted mt-0.5">Due {{ a.due_date.strftime('%d %b %Y') }}</p>{% endif %}
+            <div class="flex items-center gap-3 mt-1">
+              {% if a.action == 'record' and a.ref_id and not a.is_read %}
+                <button class="text-xs text-primary font-medium hover:underline"
+                        hx-post="{{ url_for('recurring.record_it', rule_id=a.ref_id) }}" hx-target="#alert-panel">Record it</button>
+              {% endif %}
+              {% if not a.is_read %}
+                <button class="text-xs muted hover:text-ink"
+                        hx-post="{{ url_for('api.alert_read', alert_id=a.id) }}" hx-target="#alert-panel">Mark read</button>
+              {% endif %}
+            </div>
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+</div>

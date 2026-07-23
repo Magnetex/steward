@@ -1,0 +1,78 @@
+{% from "_macros.html" import bar %}
+{% set attention = [] %}
+{% set ontrack = [] %}
+{% for group in budget.groups %}{% for row in group.rows %}
+  {% if row.state in ('warn', 'over') %}{% set _ = attention.append(row) %}{% else %}{% set _ = ontrack.append(row) %}{% endif %}
+{% endfor %}{% endfor %}
+{% set attention = attention | sort(attribute='pct', reverse=true) %}
+
+<div class="card">
+  <div class="card-pad !pb-4 border-b border-line grid grid-cols-3 gap-3 text-center">
+    <div>
+      <p class="muted text-xs">Planned</p>
+      <p class="money font-display text-lg">{{ budget.total_planned | inr0 }}</p>
+    </div>
+    <div>
+      <p class="muted text-xs">Spent</p>
+      <p class="money font-display text-lg">{{ budget.total_spent | inr0 }}</p>
+    </div>
+    <div>
+      <p class="muted text-xs">Remaining</p>
+      <p class="money font-display text-lg {{ 'text-danger' if budget.total_remaining < 0 else 'text-primary' }}">
+        {{ budget.total_remaining | inr0 }}</p>
+    </div>
+  </div>
+
+  {% if not budget.groups %}
+    <div class="card-pad text-center muted">
+      No budget for {{ month.strftime('%B') }} yet.
+      <a href="{{ url_for('budgets.index') }}" class="text-primary hover:underline">Start a plan →</a>
+    </div>
+  {% else %}
+    <div class="card-pad space-y-4">
+      <!-- Overall progress -->
+      {% set overall_pct = (budget.total_spent / budget.total_planned * 100) | int if budget.total_planned > 0 else 0 %}
+      {% set overall_state = 'over' if budget.total_remaining < 0 else ('warn' if overall_pct >= 80 else 'ok') %}
+      <div>
+        <div class="flex items-center justify-between text-sm mb-1.5">
+          <span class="muted">Overall</span>
+          <span class="money">{{ budget.total_spent | inr0 }} of {{ budget.total_planned | inr0 }}</span>
+        </div>
+        {{ bar(overall_pct, overall_state) }}
+      </div>
+
+      {% if attention %}
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-wide muted mb-2">Needs attention</p>
+          <div class="space-y-3">
+            {% for row in attention %}
+              <div>
+                <div class="flex items-center justify-between text-sm mb-1">
+                  <a href="{{ url_for('transactions.index', category=row.category.id, month=month.strftime('%Y-%m'), type='expense') }}"
+                     class="flex items-center gap-2 hover:text-primary transition-colors"
+                     title="See {{ row.category.name }} transactions">
+                    <span>{{ row.category.icon }}</span>{{ row.category.name }}
+                    {% if row.state == 'over' %}<span class="chip-danger">over</span>
+                    {% else %}<span class="chip-warn">{{ row.pct }}%</span>{% endif %}
+                  </a>
+                  <span class="money {{ 'text-danger' if row.remaining < 0 else 'text-ink-soft' }}">
+                    {{ row.spent | inr0 }} / {{ row.planned | inr0 }}</span>
+                </div>
+                {{ bar(row.pct, row.state) }}
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% else %}
+        <p class="text-sm text-primary flex items-center gap-2">🌿 Every category is on track.</p>
+      {% endif %}
+
+      <div class="flex items-center justify-between text-sm pt-1">
+        <span class="muted">
+          {{ ontrack | length }} on track{% if budget.unbudgeted > 0 %} · <span class="text-danger">{{ budget.unbudgeted | inr0 }} unbudgeted</span>{% endif %}
+        </span>
+        <a href="{{ url_for('budgets.index') }}" class="text-primary hover:underline">Open budget →</a>
+      </div>
+    </div>
+  {% endif %}
+</div>

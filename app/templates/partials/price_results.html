@@ -1,0 +1,10 @@
+<div class="space-y-1 text-sm">
+  {% for key, ok in results.items() %}
+    <div class="flex items-center justify-between">
+      <span class="muted font-mono text-xs">{{ key }}</span>
+      <span class="{{ 'text-primary' if ok else 'text-danger' }}">{{ '✓ updated' if ok else '✕ kept last' }}</span>
+    </div>
+  {% else %}
+    <p class="muted">Nothing to refresh — add holdings first.</p>
+  {% endfor %}
+</div>

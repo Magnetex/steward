@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Net worth · Steward{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-5">
+  <h1 class="font-display text-3xl">Net worth</h1>
+  <button class="btn-primary" hx-post="{{ url_for('networth.snapshot') }}" hx-swap="none">Snapshot now</button>
+</div>
+
+<div id="nw-panel" hx-get="{{ url_for('networth.panel') }}" hx-trigger="steward-refresh from:body" hx-swap="innerHTML">
+  {% include "networth/_panel.html" %}
+</div>
+{% endblock %}

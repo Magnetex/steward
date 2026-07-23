@@ -1,0 +1,106 @@
+<div x-data="{ open:false, type:'buy', date:'{{ today }}', amt:'', ppg:'{{ gold.rate if gold.rate is not none else "" }}' }">
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+    <div class="flex gap-6 flex-wrap">
+      <div><p class="muted text-xs">Grams held</p><p class="font-display text-2xl money">{{ gold.grams }}</p></div>
+      <div><p class="muted text-xs">Avg buy /g</p><p class="font-display text-2xl money">{{ gold.avg_price | inr0 }}</p></div>
+      <div><p class="muted text-xs">Current value</p>
+        <p class="font-display text-2xl money">{% if gold.value is not none %}{{ gold.value | inr0 }}{% else %}—{% endif %}</p></div>
+      <div><p class="muted text-xs">P/L</p>
+        <p class="font-display text-2xl money {{ 'text-danger' if gold.pl is not none and gold.pl < 0 else 'text-primary' }}">
+          {% if gold.pl is not none %}{{ gold.pl | inr0 }}{% if gold.pl_pct is not none %} ({{ gold.pl_pct }}%){% endif %}{% else %}—{% endif %}</p></div>
+    </div>
+    <div class="flex items-center gap-2">
+      <button class="btn-ghost" hx-post="{{ url_for('savings.gold_refresh') }}" hx-swap="none">Refresh rate</button>
+      <button class="btn-primary" @click="open=true"><span class="text-base leading-none">＋</span> Add entry</button>
+    </div>
+  </div>
+
+  <div class="card card-pad mb-5 flex flex-wrap items-center justify-between gap-2">
+    <div class="text-sm">
+      <span class="muted">Current rate</span>
+      <span class="money font-medium ml-1">{% if gold.rate is not none %}{{ gold.rate | inr }}/g{% else %}not set{% endif %}</span>
+      {% if gold.as_of %}<span class="muted text-xs ml-1">as of {{ gold.as_of.strftime('%d %b') }}</span>{% endif %}
+      <span class="muted text-xs ml-2">via {{ gold.provider }}</span>
+    </div>
+    {% if gold.manual %}
+      <span class="chip-gold">Manual rate override active — set in
+        <a href="{{ url_for('settings.index') }}" class="underline ml-1">Settings</a></span>
+    {% endif %}
+  </div>
+  {% if gold_holding_id %}{% from "_macros.html" import earmark_line %}{{ earmark_line(earmarks, 'gold', gold_holding_id) }}{% endif %}
+
+  {% if gold_txns %}
+    <div class="card sm:overflow-x-auto">
+      <table class="rtable w-full text-sm">
+        <thead class="text-xs muted"><tr class="border-b border-line">
+          <th class="text-left font-medium px-4 py-2">Date</th>
+          <th class="text-left font-medium px-4 py-2">Type</th>
+          <th class="text-right font-medium px-4 py-2">Grams</th>
+          <th class="text-right font-medium px-4 py-2">Price/g</th>
+          <th class="text-right font-medium px-4 py-2">Amount</th>
+          <th class="px-2"></th>
+        </tr></thead>
+        <tbody class="divide-y divide-line">
+          {% for t in gold_txns %}
+            <tr class="group">
+              <td class="px-4 py-2" data-label="Date">{{ t.date.strftime('%d %b %Y') }}</td>
+              <td class="px-4 py-2 capitalize" data-label="Type">{{ t.type }}</td>
+              <td class="px-4 py-2 text-right money" data-label="Grams">{{ t.grams }}</td>
+              <td class="px-4 py-2 text-right money" data-label="Price/g">{{ t.price_per_gram | inr0 }}</td>
+              <td class="px-4 py-2 text-right money" data-label="Amount">{{ t.amount | inr0 }}</td>
+              <td class="px-2 text-right">
+                <button class="row-action hover:text-danger"
+                        hx-post="{{ url_for('savings.gold_txn_delete', txn_id=t.id) }}"
+                        hx-confirm="Delete this entry?" hx-swap="none" aria-label="Delete entry">🗑</button>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="card card-pad text-center py-10"><p class="text-3xl mb-2">🪙</p><p class="muted">No gold entries yet.</p></div>
+  {% endif %}
+
+  <!-- Add entry modal -->
+  <div class="fixed inset-0 z-50 overflow-hidden" :class="{ 'pointer-events-none': !open }" @keydown.escape.window="open=false">
+    <div class="overlay-fade absolute inset-0 bg-black/40" :class="{ 'is-open': open }" @click="open=false"></div>
+    <div class="modal-panel absolute inset-x-0 top-16 mx-auto w-[92%] max-w-md card shadow-pop" :class="{ 'is-open': open }">
+      <form hx-post="{{ url_for('savings.gold_txn_save') }}" hx-swap="none">
+        <div class="card-pad space-y-4">
+          <div class="flex items-center justify-between">
+            <h2 class="font-display text-lg">Add gold entry</h2>
+            <button type="button" class="btn-ghost !px-2 !py-1" aria-label="Close" @click="open=false">✕</button>
+          </div>
+          <div class="grid grid-cols-2 gap-1 p-1 bg-surface-2 rounded-xl text-sm font-medium">
+            <template x-for="opt in ['buy','sell']" :key="opt">
+              <button type="button" @click="type=opt" class="py-2 rounded-lg capitalize"
+                      :class="type===opt ? 'bg-surface shadow-sm' : 'text-ink-soft'" x-text="opt"></button>
+            </template>
+          </div>
+          <input type="hidden" name="type" :value="type">
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="field-label">Date</label><input name="date" type="date" class="field-input" x-model="date"></div>
+            <div><label class="field-label">Amount (₹)</label><input name="amount" class="field-input money" inputmode="decimal" x-model="amt" placeholder="e.g. 5000"></div>
+            <div><label class="field-label">Price / gram (₹)</label><input name="price_per_gram" class="field-input money" inputmode="decimal" x-model="ppg"></div>
+            <div><label class="field-label">Grams <span class="muted font-normal">(calculated)</span></label>
+              <input name="grams" class="field-input money" inputmode="decimal"
+                     :value="(parseFloat(amt)>0 && parseFloat(ppg)>0) ? (parseFloat(amt)/parseFloat(ppg)).toFixed(4) : ''" readonly></div>
+          </div>
+          <div>
+            <label class="field-label" x-text="type==='sell' ? 'Deposit to' : 'Paid from'"></label>
+            <select name="account_id" class="field-input">
+              <option value="">— skip (already funded) —</option>
+              {% for a in cash_accounts %}<option value="{{ a.id }}">{{ a.icon }} {{ a.name }}</option>{% endfor %}
+            </select>
+            <p class="text-xs muted mt-1">Deducts (or, on a sell, credits) cash so net worth stays balanced. Leave blank to backfill.</p>
+          </div>
+        </div>
+        <div class="flex justify-end gap-2 px-5 py-3 border-t border-line">
+          <button type="button" class="btn-ghost" @click="open=false">Cancel</button>
+          <button type="submit" class="btn-primary" @click="open=false">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

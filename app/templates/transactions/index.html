@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Transactions · Steward{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-5">
+  <h1 class="font-display text-3xl">Transactions</h1>
+  <button class="btn-primary" @click="$dispatch('open-add')"><span class="text-base leading-none">＋</span> Add</button>
+</div>
+
+<!-- Filters -->
+<form class="card card-pad mb-5" id="txn-filters"
+      hx-get="{{ url_for('transactions.list_partial') }}" hx-target="#txn-list"
+      hx-trigger="change, keyup delay:350ms from:input[name=q], submit"
+      hx-swap="innerHTML" onsubmit="return false">
+  <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+    <div>
+      <label class="field-label">Month</label>
+      <select name="month" class="field-input">
+        <option value="">All</option>
+        {% for m in months %}
+          <option value="{{ m.strftime('%Y-%m') }}" {{ 'selected' if args.get('month') == m.strftime('%Y-%m') }}>
+            {{ m.strftime('%b %Y') }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="field-label">Type</label>
+      <select name="type" class="field-input">
+        <option value="">All</option>
+        <option value="expense" {{ 'selected' if args.get('type')=='expense' }}>Expense</option>
+        <option value="income" {{ 'selected' if args.get('type')=='income' }}>Income</option>
+        <option value="transfer" {{ 'selected' if args.get('type')=='transfer' }}>Transfer</option>
+        <option value="savings" {{ 'selected' if args.get('type')=='savings' }}>Savings</option>
+      </select>
+    </div>
+    <div>
+      <label class="field-label">Account</label>
+      <select name="account" class="field-input">
+        <option value="">All</option>
+        {% for a in accounts %}<option value="{{ a.id }}" {{ 'selected' if args.get('account')== a.id|string }}>{{ a.icon }} {{ a.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="field-label">Category</label>
+      <select name="category" class="field-input">
+        <option value="">All</option>
+        {% for c in categories %}<option value="{{ c.id }}" {{ 'selected' if args.get('category')== c.id|string }}>{{ c.icon }} {{ c.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="field-label">Tag</label>
+      <input name="tag" class="field-input" placeholder="e.g. recurring" value="{{ args.get('tag','') }}">
+    </div>
+    <div>
+      <label class="field-label">Search</label>
+      <input name="q" class="field-input" placeholder="payee or note" value="{{ args.get('q','') }}">
+    </div>
+  </div>
+  <div class="flex justify-end mt-3">
+    <a href="{{ url_for('transactions.index') }}" class="text-sm text-primary hover:underline">Clear filters</a>
+  </div>
+</form>
+
+<!-- List (also refreshes on global changes) -->
+<div id="txn-list"
+     hx-get="{{ url_for('transactions.list_partial') }}"
+     hx-trigger="steward-refresh from:body"
+     hx-include="#txn-filters" hx-swap="innerHTML">
+  {% include "transactions/_list.html" %}
+</div>
+{% endblock %}

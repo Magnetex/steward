@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · Steward{% endblock %}
+
+{% block content %}
+<div class="flex items-end justify-between mb-5">
+  <div>
+    <p class="muted text-sm">{{ today().strftime('%A, %d %B %Y') }}</p>
+    <h1 class="font-display text-3xl">Good to see you.</h1>
+  </div>
+</div>
+
+<!-- Summary strip (live) -->
+<section class="mb-6" hx-get="{{ url_for('dashboard.summary') }}"
+         hx-trigger="steward-refresh from:body" hx-swap="innerHTML">
+  {% include "dashboard/_summary.html" %}
+</section>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <section class="lg:col-span-2">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="font-display text-xl">{{ month_label(month) }} budget</h2>
+      <a href="{{ url_for('budgets.index') }}" class="text-sm text-primary hover:underline">Open budget →</a>
+    </div>
+    <div hx-get="{{ url_for('dashboard.budget_panel') }}"
+         hx-trigger="steward-refresh from:body" hx-swap="innerHTML">
+      {% include "dashboard/_budget_panel.html" %}
+    </div>
+  </section>
+
+  <section>
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="font-display text-xl">Recent</h2>
+      <a href="{{ url_for('transactions.index') }}" class="text-sm text-primary hover:underline">All →</a>
+    </div>
+    <div hx-get="{{ url_for('dashboard.recent') }}"
+         hx-trigger="steward-refresh from:body" hx-swap="innerHTML">
+      {% include "dashboard/_recent.html" %}
+    </div>
+
+    <!-- Savings glance -->
+    <a href="{{ url_for('savings.index') }}" class="card card-pad mt-4 block hover:bg-surface-2/40 transition-colors">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-display text-base">Savings</h3>
+        <span class="text-xs text-primary">View all →</span>
+      </div>
+      <div class="space-y-2 text-sm">
+        <div class="flex items-center justify-between">
+          <span class="muted">📈 Mutual funds</span>
+          <span class="money">{{ glance.mf_value | inr0 }}
+            <span class="{{ 'text-danger' if glance.mf_pl < 0 else 'text-primary' }}">
+              ({{ '+' if glance.mf_pl >= 0 }}{{ glance.mf_pl | inr0 }})</span></span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="muted">🪙 Gold</span>
+          <span class="money">{{ glance.gold_grams }}g · {{ glance.gold_value | inr0 }}</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="muted">🏦 Next maturity</span>
+          <span class="money">
+            {% if glance.next_dep %}{{ glance.next_dep.deposit.bank }} · {{ glance.next_dep.days_left }}d{% else %}—{% endif %}</span>
+        </div>
+      </div>
+    </a>
+  </section>
+</div>
+{% endblock %}

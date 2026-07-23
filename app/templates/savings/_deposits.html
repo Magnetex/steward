@@ -1,0 +1,190 @@
+{% from "_macros.html" import bar, earmark_line %}
+<div x-data="{ open:false, form:{ id:'', kind:'FD', bank:'', principal:'', installment:'', interest_rate:'', compounding:'quarterly', start_date:'{{ today }}', tenure_months:12, note:'', account_id:'' },
+             openNew(){ this.form={ id:'', kind:'FD', bank:'', principal:'', installment:'', interest_rate:'', compounding:'quarterly', start_date:'{{ today }}', tenure_months:12, note:'', account_id:'' }; this.open=true; },
+             openEdit(d){ this.form=Object.assign({ account_id:'' }, d); this.open=true; },
+             closeOpen:false, closeForm:{ id:'', bank:'', kind:'FD', proceeds:'', account_id:'', on:'{{ today }}' },
+             openClose(d){ this.closeForm=Object.assign({ proceeds:'', account_id:'', on:'{{ today }}' }, d); this.closeOpen=true; } }">
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+    <div class="flex gap-6">
+      <div><p class="muted text-xs">Accrued today</p><p class="font-display text-2xl money">{{ dep_total_accrued | inr0 }}</p></div>
+      <div><p class="muted text-xs">Value at maturity</p><p class="font-display text-2xl money">{{ dep_total_maturity | inr0 }}</p></div>
+    </div>
+    <button class="btn-primary" @click="openNew()"><span class="text-base leading-none">＋</span> Add deposit</button>
+  </div>
+
+  {% if deposits %}
+    <div class="space-y-4">
+      {% for s in deposits %}
+        {% set d = s.deposit %}
+        <div class="card card-pad">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <p class="font-medium">{{ d.bank }} <span class="chip-neutral ml-1">{{ d.kind }}</span>
+                {% if s.matured %}<span class="chip-primary ml-1">Matured</span>{% endif %}</p>
+              <p class="text-xs muted mt-0.5">
+                {% if d.kind == 'FD' %}Principal {{ d.principal | inr0 }}{% else %}{{ d.installment | inr0 }}/mo{% endif %}
+                · {{ d.interest_rate }}% {{ d.compounding }} · {{ d.tenure_months }} mo
+              </p>
+            </div>
+            <div x-data="{ o:false }" class="relative shrink-0">
+              <button class="muted hover:text-ink px-2" @click="o=!o" @click.outside="o=false"
+                      aria-label="Deposit actions" aria-haspopup="menu" :aria-expanded="o">⋯</button>
+              <div x-show="o" x-cloak class="absolute right-0 mt-1 w-32 card shadow-pop overflow-hidden z-10 text-sm">
+                <button class="block w-full text-left px-3 py-2 hover:bg-surface-2"
+                        @click='o=false; openEdit({{ {"id": d.id, "kind": d.kind, "bank": d.bank, "principal": d.principal|string, "installment": d.installment|string, "interest_rate": d.interest_rate|string, "compounding": d.compounding, "start_date": d.start_date.isoformat(), "tenure_months": d.tenure_months, "note": d.note} | tojson }})'>Edit</button>
+                <button class="block w-full text-left px-3 py-2 hover:bg-surface-2"
+                        @click='o=false; openClose({{ {"id": d.id, "kind": d.kind, "bank": d.bank, "proceeds": s.accrued_value|string, "account_id": d.account_id or ""} | tojson }})'>{{ 'Close & deposit' if s.matured else 'Close early' }}</button>
+                <form method="post" action="{{ url_for('savings.deposit_delete', dep_id=d.id) }}" onsubmit="return confirm('Delete deposit?')">
+                  <button class="block w-full text-left px-3 py-2 hover:bg-surface-2 text-danger">Delete</button>
+                </form>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 text-sm">
+            <div><p class="muted text-xs">Accrued today</p><p class="money font-medium">{{ s.accrued_value | inr0 }}</p></div>
+            <div><p class="muted text-xs">At maturity</p><p class="money font-medium">{{ s.maturity_value | inr0 }}</p></div>
+            <div><p class="muted text-xs">Interest</p><p class="money font-medium text-primary">{{ s.interest | inr0 }}</p></div>
+            <div><p class="muted text-xs">Matures</p><p class="font-medium">{{ s.maturity_date.strftime('%d %b %Y') }}</p></div>
+          </div>
+
+          {% if d.kind == 'RD' %}
+            <div class="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+              {% if d.account_id %}
+                <span class="chip-primary">🔁 Auto {{ d.installment | inr0 }}/mo</span>
+                <span class="muted">{{ s.months_elapsed }}/{{ d.tenure_months }} installments · {{ s.invested_so_far | inr0 }} in
+                  {% if d.next_run_date and not s.matured %} · next {{ d.next_run_date.strftime('%d %b %Y') }}{% endif %}
+                  {% if d.account %} · from {{ d.account.icon }} {{ d.account.name }}{% endif %}</span>
+              {% else %}
+                <span class="chip-neutral">Manual</span>
+                <span class="muted">Add a “Paid from” account to auto-contribute {{ d.installment | inr0 }} every month.</span>
+              {% endif %}
+            </div>
+          {% endif %}
+
+          <div class="mt-4">
+            <div class="flex items-center justify-between text-xs muted mb-1">
+              <span>{{ d.start_date.strftime('%b %Y') }}</span>
+              <span>{% if s.days_left > 0 %}{{ s.days_left }} days left{% else %}matured{% endif %}</span>
+              <span>{{ s.maturity_date.strftime('%b %Y') }}</span>
+            </div>
+            {{ bar(s.progress_pct, 'ok') }}
+          </div>
+          {{ earmark_line(earmarks, 'deposit', d.id) }}
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="card card-pad text-center py-10"><p class="text-3xl mb-2">🏦</p><p class="muted">No deposits yet.</p></div>
+  {% endif %}
+
+  {% if closed_deposits %}
+    <div x-data="{ show:false }" class="mt-6">
+      <button type="button" class="btn-soft text-sm" @click="show=!show">
+        <span x-text="show ? 'Hide' : 'Show'"></span> closed &amp; matured ({{ closed_deposits|length }})</button>
+      <div x-show="show" x-cloak class="mt-3 space-y-2">
+        {% for s in closed_deposits %}
+          {% set d = s.deposit %}
+          <div class="card card-pad flex items-center justify-between gap-3 opacity-80">
+            <div class="min-w-0">
+              <p class="font-medium truncate">{{ d.bank }} <span class="chip-neutral ml-1">{{ d.kind }}</span>
+                <span class="chip-primary ml-1">Closed</span></p>
+              <p class="text-xs muted mt-0.5">Closed {{ d.closed_on.strftime('%d %b %Y') }} · {{ d.closed_value | inr0 }}
+                {% if d.close_account %} → {{ d.close_account.icon }} {{ d.close_account.name }}{% endif %}</p>
+            </div>
+            <form method="post" action="{{ url_for('savings.deposit_delete', dep_id=d.id) }}"
+                  onsubmit="return confirm('Remove this closed deposit from history? Its transactions are kept.')">
+              <button class="muted hover:text-danger px-2" aria-label="Delete from history">✕</button>
+            </form>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- Close deposit modal -->
+  <div class="fixed inset-0 z-50 overflow-hidden" :class="{ 'pointer-events-none': !closeOpen }" @keydown.escape.window="closeOpen=false">
+    <div class="overlay-fade absolute inset-0 bg-black/40" :class="{ 'is-open': closeOpen }" @click="closeOpen=false"></div>
+    <div class="modal-panel absolute inset-x-0 top-16 mx-auto w-[92%] max-w-md card shadow-pop" :class="{ 'is-open': closeOpen }">
+      <form method="post" :action="'/savings/deposit/' + closeForm.id + '/close'">
+        <div class="card-pad space-y-4">
+          <div class="flex items-center justify-between">
+            <h2 class="font-display text-lg">Close deposit</h2>
+            <button type="button" class="btn-ghost !px-2 !py-1" aria-label="Close" @click="closeOpen=false">✕</button>
+          </div>
+          <p class="text-sm muted">Deposit the current value into a cash account and close this
+            <span x-text="closeForm.kind"></span>. Net worth is unchanged — the money just returns to cash.</p>
+          <div><label class="field-label">Amount to deposit (₹)</label>
+            <input name="proceeds" class="field-input money" inputmode="decimal" x-model="closeForm.proceeds"></div>
+          <div><label class="field-label">Deposit into</label>
+            <select name="account_id" class="field-input" x-model="closeForm.account_id">
+              <option value="">Default bank account</option>
+              {% for a in cash_accounts %}<option value="{{ a.id }}">{{ a.icon }} {{ a.name }}</option>{% endfor %}
+            </select></div>
+          <div><label class="field-label">Date</label>
+            <input name="on" type="date" class="field-input" x-model="closeForm.on"></div>
+        </div>
+        <div class="flex justify-end gap-2 px-5 py-3 border-t border-line">
+          <button type="button" class="btn-ghost" @click="closeOpen=false">Cancel</button>
+          <button type="submit" class="btn-primary">Close &amp; deposit</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Deposit modal -->
+  <div class="fixed inset-0 z-50 overflow-hidden" :class="{ 'pointer-events-none': !open }" @keydown.escape.window="open=false">
+    <div class="overlay-fade absolute inset-0 bg-black/40" :class="{ 'is-open': open }" @click="open=false"></div>
+    <div class="modal-panel absolute inset-x-0 top-12 mx-auto w-[94%] max-w-md card shadow-pop max-h-[85vh] overflow-y-auto" :class="{ 'is-open': open }">
+      <form method="post" action="{{ url_for('savings.deposit_save') }}">
+        <input type="hidden" name="id" :value="form.id">
+        <div class="card-pad space-y-4">
+          <div class="flex items-center justify-between">
+            <h2 class="font-display text-lg" x-text="form.id ? 'Edit deposit' : 'New deposit'"></h2>
+            <button type="button" class="btn-ghost !px-2 !py-1" aria-label="Close" @click="open=false">✕</button>
+          </div>
+          <div class="grid grid-cols-2 gap-1 p-1 bg-surface-2 rounded-xl text-sm font-medium">
+            <template x-for="opt in ['FD','RD']" :key="opt">
+              <button type="button" @click="form.kind=opt" class="py-2 rounded-lg"
+                      :class="form.kind===opt ? 'bg-surface shadow-sm' : 'text-ink-soft'" x-text="opt"></button>
+            </template>
+          </div>
+          <input type="hidden" name="kind" :value="form.kind">
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="field-label">Bank</label><input name="bank" class="field-input" x-model="form.bank"></div>
+            <div x-show="form.kind==='FD'"><label class="field-label">Principal (₹)</label>
+              <input name="principal" class="field-input money" inputmode="decimal" x-model="form.principal"></div>
+            <div x-show="form.kind==='RD'"><label class="field-label">Monthly (₹)</label>
+              <input name="installment" class="field-input money" inputmode="decimal" x-model="form.installment"></div>
+            <div><label class="field-label">Rate (% p.a.)</label>
+              <input name="interest_rate" class="field-input money" inputmode="decimal" x-model="form.interest_rate"></div>
+            <div><label class="field-label">Compounding</label>
+              <select name="compounding" class="field-input" x-model="form.compounding">
+                <option value="monthly">Monthly</option><option value="quarterly">Quarterly</option>
+                <option value="half_yearly">Half-yearly</option><option value="yearly">Yearly</option>
+              </select></div>
+            <div><label class="field-label">Start date</label>
+              <input name="start_date" type="date" class="field-input" x-model="form.start_date"></div>
+            <div><label class="field-label">Tenure (months)</label>
+              <input name="tenure_months" type="number" min="1" class="field-input" x-model="form.tenure_months"></div>
+          </div>
+          <div>
+            <label class="field-label">Paid from</label>
+            <select name="account_id" class="field-input" x-model="form.account_id">
+              <option value="">— skip (already funded) —</option>
+              {% for a in cash_accounts %}<option value="{{ a.id }}">{{ a.icon }} {{ a.name }}</option>{% endfor %}
+            </select>
+            <p class="text-xs muted mt-1"
+               x-text="form.kind==='RD'
+                 ? 'Future monthly installments auto-deduct from this account (net-worth-neutral). Months before today count toward the RD value but do not touch cash. Leave blank to only track.'
+                 : 'Deducts the principal from this account. Leave blank to backfill an existing FD.'"></p>
+          </div>
+        </div>
+        <div class="flex justify-end gap-2 px-5 py-3 border-t border-line">
+          <button type="button" class="btn-ghost" @click="open=false">Cancel</button>
+          <button type="submit" class="btn-primary">Save deposit</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

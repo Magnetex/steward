@@ -1,0 +1,176 @@
+{# Add-holding (scheme search) and add-transaction (NAV autofill) modals #}
+
+<!-- Add holding -->
+<div class="fixed inset-0 z-50 overflow-hidden" :class="{ 'pointer-events-none': !holdingOpen }"
+     @keydown.escape.window="holdingOpen=false">
+  <div class="overlay-fade absolute inset-0 bg-black/40" :class="{ 'is-open': holdingOpen }" @click="holdingOpen=false"></div>
+  <div class="modal-panel absolute inset-x-0 top-12 mx-auto w-[94%] max-w-lg card shadow-pop max-h-[85vh] overflow-y-auto"
+       :class="{ 'is-open': holdingOpen }">
+    <form method="post" action="{{ url_for('savings.mf_holding_save') }}">
+      <div class="card-pad space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="font-display text-lg">Add mutual fund holding</h2>
+          <button type="button" class="btn-ghost !px-2 !py-1" aria-label="Close" @click="holdingOpen=false">✕</button>
+        </div>
+
+        <div class="relative">
+          <label class="field-label">Search scheme (mfapi.in)</label>
+          <input class="field-input" placeholder="e.g. Parag Parikh Flexi Cap"
+                 x-model="query" @input.debounce.350ms="searchSchemes()" autocomplete="off">
+          <p class="text-xs muted mt-1" x-show="searching">Searching…</p>
+          <div x-show="results.length" x-cloak class="mt-1 card shadow-pop max-h-56 overflow-y-auto">
+            <template x-for="s in results" :key="s.scheme_code">
+              <button type="button" class="w-full text-left px-3 py-2 text-sm hover:bg-surface-2 border-b border-line last:border-0"
+                      @click="pickScheme(s)" x-text="s.scheme_name"></button>
+            </template>
+          </div>
+        </div>
+
+        <div x-show="holding.scheme_code" class="text-sm chip-primary" x-cloak>
+          <span x-text="'Scheme code ' + holding.scheme_code"></span>
+        </div>
+
+        <input type="hidden" name="scheme_code" :value="holding.scheme_code">
+        <input type="hidden" name="scheme_name" :value="holding.scheme_name">
+
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="field-label">Fund house</label>
+            <input name="fund_house" class="field-input" x-model="holding.fund_house" placeholder="Optional"></div>
+          <div><label class="field-label">Goal / tag</label>
+            <input name="goal" class="field-input" x-model="holding.goal" placeholder="Optional"></div>
+          <div><label class="field-label">Plan</label>
+            <select name="plan_type" class="field-input" x-model="holding.plan_type">
+              <option value="direct">Direct</option><option value="regular">Regular</option>
+            </select></div>
+          <div><label class="field-label">Asset type (tax)</label>
+            <select name="asset_type" class="field-input" x-model="holding.asset_type">
+              <option value="equity">Equity</option><option value="debt">Debt</option>
+            </select></div>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2 px-5 py-3 border-t border-line">
+        <button type="button" class="btn-ghost" @click="holdingOpen=false">Cancel</button>
+        <button type="submit" class="btn-primary" :disabled="!holding.scheme_code">Save holding</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Set up SIP (recurring monthly investment with optional annual step-up) -->
+<div class="fixed inset-0 z-50 overflow-hidden" :class="{ 'pointer-events-none': !sipOpen }"
+     @keydown.escape.window="sipOpen=false">
+  <div class="overlay-fade absolute inset-0 bg-black/40" :class="{ 'is-open': sipOpen }" @click="sipOpen=false"></div>
+  <div class="modal-panel absolute inset-x-0 top-12 mx-auto w-[92%] max-w-md card shadow-pop max-h-[85vh] overflow-y-auto"
+       :class="{ 'is-open': sipOpen }">
+    <form hx-post="{{ url_for('savings.mf_sip_save') }}" hx-swap="none">
+      <div class="card-pad space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="font-display text-lg">Set up a SIP</h2>
+          <button type="button" class="btn-ghost !px-2 !py-1" aria-label="Close" @click="sipOpen=false">✕</button>
+        </div>
+        <p class="text-xs muted -mt-2">Invests a fixed amount into one fund every month. Installments already due
+          since the start date are backfilled at each month's NAV; future ones run automatically.</p>
+
+        <div>
+          <label class="field-label">Fund</label>
+          <select name="holding_id" class="field-input" x-model="sip.holding_id" required>
+            <option value="">Choose a holding…</option>
+            {% for h in holdings %}<option value="{{ h.id }}">{{ h.scheme_name }}</option>{% endfor %}
+          </select>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="field-label">Monthly amount (₹)</label>
+            <input name="amount" class="field-input money" inputmode="decimal" x-model="sip.amount" required></div>
+          <div><label class="field-label">Start date</label>
+            <input name="start_date" type="date" class="field-input" x-model="sip.start_date"></div>
+        </div>
+
+        <div>
+          <label class="field-label">Annual step-up (%)</label>
+          <input name="step_up_pct" class="field-input money" inputmode="decimal" x-model="sip.step_up_pct"
+                 placeholder="0 — e.g. 10 raises the amount 10% every year">
+          <p class="text-xs muted mt-1" x-text="sipProjection()"></p>
+        </div>
+
+        <div>
+          <label class="field-label">Paid from</label>
+          <select name="account_id" class="field-input" x-model="sip.account_id">
+            <option value="">— skip (asset only) —</option>
+            {% for a in cash_accounts %}<option value="{{ a.id }}">{{ a.icon }} {{ a.name }}</option>{% endfor %}
+          </select>
+          <p class="text-xs muted mt-1">Future installments deduct cash from this account so net worth stays balanced.
+            Past (backfilled) installments are asset-only and never touch cash. Leave blank to only track units.</p>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2 px-5 py-3 border-t border-line">
+        <button type="button" class="btn-ghost" @click="sipOpen=false">Cancel</button>
+        <button type="submit" class="btn-primary" @click="sipOpen=false">Create SIP</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Add transaction (SIP / buy / sell) with NAV autofill -->
+<div class="fixed inset-0 z-50 overflow-hidden" :class="{ 'pointer-events-none': !txnOpen }"
+     @keydown.escape.window="txnOpen=false">
+  <div class="overlay-fade absolute inset-0 bg-black/40" :class="{ 'is-open': txnOpen }" @click="txnOpen=false"></div>
+  <div class="modal-panel absolute inset-x-0 top-16 mx-auto w-[92%] max-w-md card shadow-pop" :class="{ 'is-open': txnOpen }">
+    <form hx-post="{{ url_for('savings.mf_txn_save') }}" hx-swap="none">
+      <input type="hidden" name="holding_id" :value="txn.holding_id">
+      <div class="card-pad space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="font-display text-lg">Add transaction</h2>
+          <button type="button" class="btn-ghost !px-2 !py-1" aria-label="Close" @click="txnOpen=false">✕</button>
+        </div>
+        <p class="text-sm muted truncate" x-text="txn.holding_name"></p>
+
+        <div class="grid grid-cols-3 gap-1 p-1 bg-surface-2 rounded-xl text-sm font-medium">
+          <template x-for="opt in ['sip','buy','sell']" :key="opt">
+            <button type="button" @click="txn.type=opt" class="py-2 rounded-lg capitalize"
+                    :class="txn.type===opt ? 'bg-surface shadow-sm' : 'text-ink-soft'" x-text="opt"></button>
+          </template>
+        </div>
+        <input type="hidden" name="type" :value="txn.type">
+
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="field-label">Date</label>
+            <input name="date" type="date" class="field-input" x-model="txn.date" @change="autofillNav()"></div>
+          <div><label class="field-label">Amount (₹)</label>
+            <input name="amount" class="field-input money" inputmode="decimal" x-model="txn.amount" @input="computeUnits()"></div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="field-label flex items-center justify-between">
+              <span>NAV</span>
+              <button type="button" class="text-primary text-xs hover:underline" @click="autofillNav()">Auto-fill</button>
+            </label>
+            <input name="nav" class="field-input money" inputmode="decimal" x-model="txn.nav" @input="computeUnits()"></div>
+          <div><label class="field-label">Units</label>
+            <input name="units" class="field-input money" inputmode="decimal" x-model="txn.units"></div>
+        </div>
+        <p class="text-xs muted" x-text="navNote"></p>
+
+        <div>
+          <label class="field-label" x-text="txn.type==='sell' ? 'Deposit to' : 'Paid from'"></label>
+          <select name="account_id" class="field-input">
+            <option value="">— skip (already funded) —</option>
+            {% for a in cash_accounts %}<option value="{{ a.id }}">{{ a.icon }} {{ a.name }}</option>{% endfor %}
+          </select>
+          <p class="text-xs muted mt-1" x-text="txn.type==='sell'
+              ? 'Credits this account and records a redemption.'
+              : 'Deducts cash so your net worth stays balanced. Leave blank to backfill a past holding.'"></p>
+        </div>
+
+        <label class="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="checkbox" name="tags" value="80C" class="rounded border-line text-primary focus:ring-primary/40">
+          Counts toward 80C (e.g. ELSS)
+        </label>
+      </div>
+      <div class="flex justify-end gap-2 px-5 py-3 border-t border-line">
+        <button type="button" class="btn-ghost" @click="txnOpen=false">Cancel</button>
+        <button type="submit" class="btn-primary" @click="txnOpen=false">Save</button>
+      </div>
+    </form>
+  </div>
+</div>

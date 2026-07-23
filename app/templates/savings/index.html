@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Savings · Steward{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+  <h1 class="font-display text-3xl">Savings</h1>
+</div>
+
+<!-- Tabs -->
+<div class="flex gap-1 mb-6 overflow-x-auto p-1 bg-surface-2 rounded-xl w-full sm:w-auto sm:inline-flex">
+  {% for t in tabs %}
+    <a href="{{ url_for('savings.index', tab=t) }}"
+       class="px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors
+              {{ 'bg-surface shadow-sm text-ink' if tab == t else 'text-ink-soft hover:text-ink' }}">
+      {{ tab_labels[t] }}</a>
+  {% endfor %}
+</div>
+
+<div id="tab-content"
+     hx-get="{{ url_for('savings.tabbody', tab=tab) }}"
+     hx-trigger="steward-refresh from:body" hx-swap="innerHTML">
+  {% include "savings/_" + tab + ".html" %}
+</div>
+{% endblock %}

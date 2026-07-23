@@ -1,0 +1,111 @@
+<div x-data="{ open:false, month:'{{ today[:7] }}', ee:'', er:'' }">
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+    <div class="flex gap-6">
+      <div><p class="muted text-xs">Balance</p><p class="font-display text-2xl money">{{ epf_total | inr0 }}</p></div>
+      <div><p class="muted text-xs">This FY (employee)</p><p class="font-display text-2xl money">{{ epf_fy_contrib | inr0 }}</p></div>
+      <div><p class="muted text-xs">Rate</p><p class="font-display text-2xl money">{{ epf_rate }}%</p></div>
+    </div>
+    <div class="flex items-center gap-2">
+      <button class="btn-ghost" hx-post="{{ url_for('savings.epf_interest') }}" hx-swap="none"
+              hx-confirm="Credit one year's interest at {{ epf_rate }}% on the current balance?">Credit interest</button>
+      <button class="btn-primary" @click="open=true"><span class="text-base leading-none">＋</span> Add entry</button>
+    </div>
+  </div>
+
+  {% if epf_accounts %}
+    {% set acc = epf_accounts[0] %}
+    {% if acc.series %}
+      <div class="card card-pad mb-5">
+        <p class="muted text-xs mb-2">Running balance</p>
+        <div id="epf-chart" class="h-56"
+             data-cats='{{ acc.series | map(attribute="entry") | map(attribute="month") | map("string") | list | tojson }}'
+             data-vals='{{ acc.series | map(attribute="balance") | map("float") | list | tojson }}'></div>
+      </div>
+    {% endif %}
+    <div class="card sm:overflow-x-auto">
+      <table class="rtable w-full text-sm">
+        <thead class="text-xs muted"><tr class="border-b border-line">
+          <th class="text-left font-medium px-4 py-2">Month</th>
+          <th class="text-left font-medium px-4 py-2">Type</th>
+          <th class="text-right font-medium px-4 py-2">Employee</th>
+          <th class="text-right font-medium px-4 py-2">Employer</th>
+          <th class="text-right font-medium px-4 py-2">Balance</th>
+          <th class="px-2"></th>
+        </tr></thead>
+        <tbody class="divide-y divide-line">
+          {% for r in acc.series | reverse %}
+            <tr class="group">
+              <td class="px-4 py-2" data-label="Month">{{ r.entry.month.strftime('%b %Y') }}</td>
+              <td class="px-4 py-2 capitalize" data-label="Type">{{ r.entry.entry_type }}</td>
+              <td class="px-4 py-2 text-right money" data-label="Employee">{% if r.entry.entry_type=='contribution' %}{{ r.entry.employee_share | inr0 }}{% else %}—{% endif %}</td>
+              <td class="px-4 py-2 text-right money" data-label="Employer">{% if r.entry.entry_type=='contribution' %}{{ r.entry.employer_share | inr0 }}{% else %}{{ r.entry.interest_amount | inr0 }}{% endif %}</td>
+              <td class="px-4 py-2 text-right money font-medium" data-label="Balance">{{ r.balance | inr0 }}</td>
+              <td class="px-2 text-right">
+                <button class="row-action hover:text-danger"
+                        hx-post="{{ url_for('savings.epf_entry_delete', entry_id=r.entry.id) }}"
+                        hx-confirm="Delete this entry?" hx-swap="none" aria-label="Delete entry">🗑</button>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="card card-pad text-center py-10"><p class="text-3xl mb-2">🏛️</p><p class="muted">No EPF entries yet.</p></div>
+  {% endif %}
+
+  <!-- Add entry modal -->
+  <div class="fixed inset-0 z-50 overflow-hidden" :class="{ 'pointer-events-none': !open }" @keydown.escape.window="open=false">
+    <div class="overlay-fade absolute inset-0 bg-black/40" :class="{ 'is-open': open }" @click="open=false"></div>
+    <div class="modal-panel absolute inset-x-0 top-16 mx-auto w-[92%] max-w-md card shadow-pop" :class="{ 'is-open': open }">
+      <form hx-post="{{ url_for('savings.epf_entry_save') }}" hx-swap="none">
+        <div class="card-pad space-y-4">
+          <div class="flex items-center justify-between">
+            <h2 class="font-display text-lg">Add EPF contribution</h2>
+            <button type="button" class="btn-ghost !px-2 !py-1" aria-label="Close" @click="open=false">✕</button>
+          </div>
+          <div><label class="field-label">Month</label><input name="month" type="month" class="field-input" x-model="month"></div>
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="field-label">Employee share (₹)</label><input name="employee_share" class="field-input money" inputmode="decimal" x-model="ee"></div>
+            <div><label class="field-label">Employer share (₹)</label><input name="employer_share" class="field-input money" inputmode="decimal" x-model="er"></div>
+          </div>
+          <div>
+            <label class="field-label">Paid from</label>
+            <select name="account_id" class="field-input">
+              <option value="">— skip (deducted from salary) —</option>
+              {% for a in cash_accounts %}<option value="{{ a.id }}">{{ a.icon }} {{ a.name }}</option>{% endfor %}
+            </select>
+            <p class="text-xs muted mt-1">EPF is normally deducted from salary before it reaches you — leave blank. Pick an account only if you contribute from your own cash; it records the employee share under the EPF savings category.</p>
+          </div>
+        </div>
+        <div class="flex justify-end gap-2 px-5 py-3 border-t border-line">
+          <button type="button" class="btn-ghost" @click="open=false">Cancel</button>
+          <button type="submit" class="btn-primary" @click="open=false">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+  (function () {
+    function render() {
+      var el = document.getElementById("epf-chart");
+      if (!el || !window.Steward || !window.ApexCharts) return;
+      if (el._chart) { try { el._chart.destroy(); } catch (e) {} }
+      var cats = JSON.parse(el.dataset.cats || "[]").map(function (s) { return s.slice(0, 7); });
+      var vals = JSON.parse(el.dataset.vals || "[]");
+      var p = Steward.palette();
+      el._chart = new ApexCharts(el, Object.assign(Steward.baseChartOptions(), {
+        chart: { type: "area", height: 220, toolbar: { show: false } },
+        series: [{ name: "Balance", data: vals }],
+        xaxis: { categories: cats, labels: { rotate: 0, style: { fontSize: "10px" } } },
+        yaxis: { labels: { formatter: function (v) { return "₹" + Math.round(v / 1000) + "k"; } } },
+        colors: [p.primary], stroke: { curve: "smooth", width: 2 },
+        fill: { type: "gradient", gradient: { opacityFrom: 0.3, opacityTo: 0 } },
+      }));
+      el._chart.render();
+    }
+    if (window.Steward && window.ApexCharts) render();
+    else document.addEventListener("DOMContentLoaded", render);
+  })();
+</script>

@@ -1,0 +1,191 @@
+{% from "_macros.html" import bar, planned_cell %}
+
+<!-- Totals -->
+<div class="card card-pad mb-5 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+  <div>
+    <p class="muted text-xs">Income received</p>
+    <p class="font-display text-xl money text-primary">{{ income.total_received | inr0 }}</p>
+  </div>
+  <div>
+    <p class="muted text-xs">Planned spending</p>
+    <p class="font-display text-xl money">{{ budget.total_planned | inr0 }}</p>
+  </div>
+  <div>
+    <p class="muted text-xs">Spent</p>
+    <p class="font-display text-xl money">{{ budget.total_spent | inr0 }}</p>
+  </div>
+  <div>
+    <p class="muted text-xs">Left to spend</p>
+    <p class="font-display text-xl money {{ 'text-danger' if budget.total_remaining < 0 else 'text-primary' }}">
+      {{ budget.total_remaining | inr0 }}</p>
+  </div>
+</div>
+
+<!-- Income section -->
+<section class="card mb-5">
+  <div class="card-pad !py-3 border-b border-line flex items-center justify-between">
+    <h2 class="font-display text-lg">Income</h2>
+    <span class="text-sm muted money">{{ income.total_received | inr0 }} received / {{ income.total_planned | inr0 }} planned</span>
+  </div>
+  <div class="divide-y divide-line">
+    {% for row in income.rows %}
+      <div class="flex items-center gap-3 px-5 py-3">
+        <span>{{ row.category.icon }}</span>
+        <span class="flex-1 text-sm">{{ row.category.name }}</span>
+        <span class="text-sm money text-primary mr-4">{{ row.received | inr0 }}</span>
+        <span class="text-xs muted">planned</span>
+        {{ planned_cell(month, row.category.id, row.planned) }}
+      </div>
+    {% else %}
+      <div class="px-5 py-4 text-sm muted">No income yet this month.</div>
+    {% endfor %}
+    {% if income.extra > 0 %}
+      <div class="flex items-center justify-between px-5 py-2 text-sm">
+        <span class="muted">Other income</span><span class="money text-primary">{{ income.extra | inr0 }}</span>
+      </div>
+    {% endif %}
+  </div>
+</section>
+
+<!-- Savings section -->
+{% if budget.savings.rows %}
+<section class="card mb-5">
+  <div class="card-pad !py-3 border-b border-line flex items-center justify-between">
+    <h2 class="font-display text-lg">Savings</h2>
+    <span class="text-sm muted money">{{ budget.savings.total_saved | inr0 }} saved / {{ budget.savings.total_planned | inr0 }} planned</span>
+  </div>
+  <div class="divide-y divide-line">
+    {% for row in budget.savings.rows %}
+      <div class="px-5 py-3.5 group/row">
+        <div class="flex items-center gap-2 mb-1.5">
+          <a href="{{ url_for('transactions.index', category=row.category.id, month=month.strftime('%Y-%m'), type='savings') }}"
+             class="flex items-center gap-2 min-w-0 flex-1 hover:text-primary transition-colors"
+             title="See {{ row.category.name }} savings">
+            <span>{{ row.category.icon }}</span>
+            <span class="text-sm font-medium truncate">{{ row.category.name }}</span>
+            {% if row.state == 'over' %}<span class="chip-primary">{{ row.pct }}%</span>
+            {% elif row.state == 'warn' %}<span class="chip-warn">{{ row.pct }}%</span>{% endif %}
+          </a>
+          <span class="text-sm money text-primary">{{ row.saved | inr0 }}</span>
+          <span class="text-ink-soft text-sm">/</span>
+          {{ planned_cell(month, row.category.id, row.planned) }}
+          {% if row.has_line %}
+            <button type="button" class="muted hover:text-danger opacity-0 group-hover/row:opacity-100 transition-opacity shrink-0"
+                    aria-label="Remove {{ row.category.name }} from budget"
+                    title="Remove from budget"
+                    hx-post="{{ url_for('budgets.remove_line', month=month.strftime('%Y-%m')) }}"
+                    hx-vals='{"category_id": {{ row.category.id }}}' hx-swap="none"
+                    hx-confirm="Remove {{ row.category.name }} from this month's budget?">✕</button>
+          {% endif %}
+        </div>
+        {{ bar(row.pct, row.state) }}
+      </div>
+    {% endfor %}
+    {% if budget.savings.extra > 0 %}
+      <div class="flex items-center justify-between px-5 py-2 text-sm">
+        <span class="muted">Other savings</span><span class="money text-primary">{{ budget.savings.extra | inr0 }}</span>
+      </div>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+
+<!-- Expense groups -->
+{% if not budget.groups %}
+  <div class="card card-pad text-center py-10">
+    <p class="text-2xl mb-2">🌱</p>
+    <p class="muted mb-4">No budget for {{ month.strftime('%B') }} yet — start from last month's plan?</p>
+    <button class="btn-primary" hx-post="{{ url_for('budgets.copy_last', month=month.strftime('%Y-%m')) }}" hx-swap="none">
+      Copy last month
+    </button>
+  </div>
+{% else %}
+  <div class="space-y-5">
+    {% for group in budget.groups %}
+      <section class="card">
+        <div class="card-pad !py-3 border-b border-line flex items-center justify-between">
+          <h3 class="text-xs font-semibold uppercase tracking-wide muted">{{ group.name }}</h3>
+          <span class="text-sm muted money">{{ group.spent | inr0 }} / {{ group.planned | inr0 }}</span>
+        </div>
+        <div class="divide-y divide-line">
+          {% for row in group.rows %}
+            <div class="px-5 py-3.5 group/row">
+              <div class="flex items-center gap-2 mb-1.5">
+                <a href="{{ url_for('transactions.index', category=row.category.id, month=month.strftime('%Y-%m'), type='expense') }}"
+                   class="flex items-center gap-2 min-w-0 flex-1 hover:text-primary transition-colors"
+                   title="See {{ row.category.name }} transactions">
+                  <span>{{ row.category.icon }}</span>
+                  <span class="text-sm font-medium truncate">{{ row.category.name }}</span>
+                  {% if row.state == 'over' %}<span class="chip-danger">over</span>
+                  {% elif row.state == 'warn' %}<span class="chip-warn">{{ row.pct }}%</span>{% endif %}
+                </a>
+                <button type="button" class="muted hover:text-primary shrink-0 leading-none px-1"
+                        aria-label="Add expense to {{ row.category.name }}"
+                        title="Add expense to {{ row.category.name }}"
+                        @click="$dispatch('open-add', { category_id: {{ row.category.id }}, type: 'expense' })">＋</button>
+                <span class="text-sm money {{ 'text-danger' if row.remaining < 0 else 'text-ink-soft' }}">{{ row.spent | inr0 }}</span>
+                <span class="text-ink-soft text-sm">/</span>
+                {{ planned_cell(month, row.category.id, row.planned) }}
+                <button type="button" class="muted hover:text-danger opacity-0 group-hover/row:opacity-100 transition-opacity shrink-0"
+                        aria-label="Remove {{ row.category.name }} from budget"
+                        title="Remove from budget"
+                        hx-post="{{ url_for('budgets.remove_line', month=month.strftime('%Y-%m')) }}"
+                        hx-vals='{"category_id": {{ row.category.id }}}' hx-swap="none"
+                        hx-confirm="Remove {{ row.category.name }} from this month's budget?">✕</button>
+              </div>
+              {{ bar(row.pct, row.state) }}
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+    {% endfor %}
+
+    {% if budget.unbudgeted > 0 %}
+      <div class="card" x-data="{ open: false }">
+        <button type="button" class="w-full card-pad !py-3 flex items-center justify-between text-left"
+                @click="open = !open">
+          <span class="flex items-center gap-2 text-sm">
+            <span class="muted">Unbudgeted spending</span>
+            <span class="chip-warn">{{ budget.unbudgeted_rows | length }}</span>
+          </span>
+          <span class="flex items-center gap-2">
+            <span class="money text-danger font-medium">{{ budget.unbudgeted | inr0 }}</span>
+            <span class="muted text-xs" x-text="open ? '▲' : '▼'"></span>
+          </span>
+        </button>
+        <div x-show="open" x-cloak class="border-t border-line divide-y divide-line">
+          {% for r in budget.unbudgeted_rows %}
+            <div class="flex items-center gap-3 px-5 py-2.5 text-sm">
+              <span>{{ r.icon }}</span>
+              <span class="flex-1">{{ r.name }}</span>
+              <span class="money">{{ r.amount | inr0 }}</span>
+              {% if r.category_id %}
+                <button type="button" class="btn-soft !py-1 !px-2.5 text-xs"
+                        hx-post="{{ url_for('budgets.add_line', month=month.strftime('%Y-%m')) }}"
+                        hx-vals='{"category_id": {{ r.category_id }}}' hx-swap="none">Add to budget</button>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+  </div>
+{% endif %}
+
+<!-- Add a category line -->
+<div class="mt-5 flex flex-wrap items-center gap-3">
+  {% if addable %}
+    <form class="card card-pad flex-1 min-w-[16rem] flex items-center gap-3"
+          hx-post="{{ url_for('budgets.add_line', month=month.strftime('%Y-%m')) }}" hx-swap="none">
+      <label class="text-sm muted shrink-0">Add to budget</label>
+      <select name="category_id" class="field-input flex-1" required>
+        <option value="">Choose a category…</option>
+        {% for c in addable %}<option value="{{ c.id }}">{{ c.icon }} {{ c.name }}{% if c.group %} · {{ c.group }}{% endif %}</option>{% endfor %}
+      </select>
+      <button class="btn-soft shrink-0" type="submit">Add</button>
+    </form>
+  {% else %}
+    <p class="muted text-sm">Every category is in this month's budget.</p>
+  {% endif %}
+  <a href="{{ url_for('categories.index') }}" class="btn-ghost shrink-0">Manage categories</a>
+</div>

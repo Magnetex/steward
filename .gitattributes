@@ -1,0 +1,8 @@
+# Normalise line endings so a repo authored on Windows clones cleanly on
+# Linux/Termux. Shell scripts must keep LF or the shebang breaks.
+* text=auto
+*.sh text eol=lf
+*.ps1 text eol=crlf
+*.png binary
+*.svg text
+*.webmanifest text

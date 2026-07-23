@@ -1,0 +1,19 @@
+{% from "_macros.html" import txn_icon %}
+<div class="card divide-y divide-line">
+  {% for t in recent %}
+    <button type="button" class="w-full text-left flex items-center gap-3 px-4 py-3 hover:bg-surface-2/60 transition-colors"
+            @click="$dispatch('open-edit', { id: {{ t.id }} })">
+      <span class="grid place-items-center h-9 w-9 rounded-xl bg-surface-2 shrink-0">{{ txn_icon(t) }}</span>
+      <div class="min-w-0 flex-1">
+        <p class="text-sm font-medium truncate">{{ t.payee or (t.category.name if t.category else 'Transfer') }}</p>
+        <p class="text-xs muted">{{ t.date.strftime('%d %b') }}{% if t.category %} · {{ t.category.name }}{% elif t.has_splits %} · Split{% endif %}</p>
+      </div>
+      <span class="money text-sm font-medium shrink-0
+        {{ 'text-primary' if t.type == 'income' else 'text-ink-soft' if t.type == 'transfer' else 'text-ink' }}">
+        {{ '+' if t.type == 'income' }}{{ '−' if t.type == 'expense' }}{{ t.amount | inr0 }}
+      </span>
+    </button>
+  {% else %}
+    <div class="px-4 py-8 text-center muted text-sm">No transactions yet. Add your first one.</div>
+  {% endfor %}
+</div>

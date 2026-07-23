@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · Steward{% endblock %}
+{% block content %}
+<div class="max-w-lg mx-auto text-center py-16">
+  <div class="text-5xl mb-4">{{ icon }}</div>
+  <h1 class="font-display text-2xl mb-2">{{ title }}</h1>
+  <p class="muted">This screen is being built in <span class="chip-primary">{{ phase }}</span>.</p>
+  <a href="{{ url_for('dashboard.index') }}" class="btn-soft mt-6">← Back to dashboard</a>
+</div>
+{% endblock %}

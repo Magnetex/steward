@@ -1,0 +1,104 @@
+{# Recurring rule add/edit modal (inline Alpine) #}
+<div class="fixed inset-0 z-50 overflow-hidden" :class="{ 'pointer-events-none': !modalOpen }"
+     @keydown.escape.window="close()">
+  <div class="overlay-fade absolute inset-0 bg-black/40" :class="{ 'is-open': modalOpen }" @click="close()"></div>
+  <div class="modal-panel absolute inset-x-0 top-8 mx-auto w-[94%] max-w-lg card shadow-pop max-h-[85vh] overflow-y-auto"
+       :class="{ 'is-open': modalOpen }">
+    <form method="post" action="{{ url_for('recurring.save') }}">
+      <input type="hidden" name="id" :value="form.id">
+      <div class="card-pad space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="font-display text-lg" x-text="form.id ? 'Edit rule' : 'New recurring rule'"></h2>
+          <button type="button" class="btn-ghost !px-2 !py-1" aria-label="Close" @click="close()">✕</button>
+        </div>
+
+        <div class="grid grid-cols-3 gap-1 p-1 bg-surface-2 rounded-xl text-sm font-medium">
+          <template x-for="opt in ['expense','income','transfer']" :key="opt">
+            <button type="button" @click="form.type=opt" class="py-2 rounded-lg capitalize"
+                    :class="form.type===opt ? 'bg-surface shadow-sm' : 'text-ink-soft'" x-text="opt"></button>
+          </template>
+        </div>
+        <input type="hidden" name="type" :value="form.type">
+
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="field-label">Payee</label>
+            <input name="payee" class="field-input" x-model="form.payee"></div>
+          <div><label class="field-label">Amount (₹)</label>
+            <input name="amount" class="field-input money" inputmode="decimal" x-model="form.amount"></div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div x-show="form.type!=='transfer'"><label class="field-label">Category</label>
+            <select name="category_id" class="field-input" x-model="form.category_id" :disabled="form.type==='transfer'">
+              <option value="">Uncategorised</option>
+              <template x-if="form.type==='expense'"><optgroup label="Expense">
+                {% for c in expense_cats %}<option value="{{ c.id }}">{{ c.icon }} {{ c.name }}</option>{% endfor %}
+              </optgroup></template>
+              <template x-if="form.type==='income'"><optgroup label="Income">
+                {% for c in income_cats %}<option value="{{ c.id }}">{{ c.icon }} {{ c.name }}</option>{% endfor %}
+              </optgroup></template>
+            </select>
+          </div>
+          <div><label class="field-label" x-text="form.type==='transfer' ? 'From account' : 'Account'"></label>
+            <select name="account_id" class="field-input" x-model="form.account_id">
+              <option value="">Choose…</option>
+              {% for a in accounts %}<option value="{{ a.id }}">{{ a.icon }} {{ a.name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div x-show="form.type==='transfer'"><label class="field-label">To account</label>
+            <select name="transfer_account_id" class="field-input" x-model="form.transfer_account_id" :disabled="form.type!=='transfer'">
+              <option value="">Choose…</option>
+              {% for a in accounts %}<option value="{{ a.id }}">{{ a.icon }} {{ a.name }}</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="field-label">Frequency</label>
+            <select name="frequency" class="field-input" x-model="form.frequency">
+              {% for fq in freqs %}<option value="{{ fq }}">{{ fq }}</option>{% endfor %}
+            </select>
+          </div>
+          <div x-show="form.frequency==='monthly' || form.frequency==='yearly'">
+            <label class="field-label">Day of month</label>
+            <input name="day_of_month" type="number" min="1" max="31" class="field-input" x-model="form.day_of_month">
+          </div>
+          <div x-show="form.frequency==='weekly'">
+            <label class="field-label">Weekday</label>
+            <select name="weekday" class="field-input" x-model="form.weekday">
+              {% for i, d in [(0,'Mon'),(1,'Tue'),(2,'Wed'),(3,'Thu'),(4,'Fri'),(5,'Sat'),(6,'Sun')] %}
+                <option value="{{ i }}">{{ d }}</option>{% endfor %}
+            </select>
+          </div>
+          <div x-show="form.frequency==='yearly'">
+            <label class="field-label">Month</label>
+            <input name="month_of_year" type="number" min="1" max="12" class="field-input" x-model="form.month_of_year">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="field-label">Next due date</label>
+            <input name="next_due_date" type="date" class="field-input" x-model="form.next_due_date"></div>
+          <div><label class="field-label">Mode</label>
+            <select name="mode" class="field-input" x-model="form.mode">
+              <option value="auto_create">Auto-create transaction</option>
+              <option value="remind_only">Remind me only</option>
+            </select>
+          </div>
+        </div>
+
+        <div><label class="field-label">Note</label>
+          <input name="note" class="field-input" x-model="form.note"></div>
+
+        <label class="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="checkbox" name="active" x-model="form.active" class="rounded border-line text-primary focus:ring-primary/40">
+          Active
+        </label>
+      </div>
+      <div class="flex justify-end gap-2 px-5 py-3 border-t border-line">
+        <button type="button" class="btn-ghost" @click="close()">Cancel</button>
+        <button type="submit" class="btn-primary">Save rule</button>
+      </div>
+    </form>
+  </div>
+</div>

@@ -1,0 +1,62 @@
+{% set comp_series = [] %}
+{% for k in bucket_keys %}{% set _ = comp_series.append({'name': labels[loop.index0], 'data': composition[k]}) %}{% endfor %}
+<div x-data="{ mode: 'trend', compRendered: false }">
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- Current breakdown -->
+    <div class="card card-pad">
+      <p class="muted text-sm">Net worth today</p>
+      <p class="font-display text-3xl money mb-3">{{ total | inr0 }}</p>
+      <div id="nw-donut" data-labels='{{ labels | tojson }}' data-values='{{ donut_values | tojson }}'></div>
+      <ul class="mt-3 space-y-1.5 text-sm">
+        {% for k in bucket_keys %}
+          <li class="flex items-center justify-between">
+            <span class="flex items-center gap-2">
+              <span class="inline-block h-2.5 w-2.5 rounded-full" style="background: {{ ['#1E6B4E','#B08014','#3D8F7B','#C2703D','#6B7280','#7C4DD6','#C79A2E'][loop.index0] }}"></span>
+              {{ labels[loop.index0] }}
+            </span>
+            <span class="money">{{ buckets[k] | inr0 }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <!-- Trend / composition -->
+    <div class="card card-pad lg:col-span-2">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="font-display text-lg" x-text="mode==='trend' ? 'Net worth trend' : 'Composition over time'"></h2>
+        <div class="flex gap-1 p-1 bg-surface-2 rounded-xl text-sm font-medium">
+          <button class="px-3 py-1.5 rounded-lg" :class="mode==='trend' ? 'bg-surface shadow-sm' : 'text-ink-soft'"
+                  @click="mode='trend'">Trend</button>
+          <button class="px-3 py-1.5 rounded-lg" :class="mode==='composition' ? 'bg-surface shadow-sm' : 'text-ink-soft'"
+                  @click="mode='composition'; if(!compRendered){ window.__renderNwComp && window.__renderNwComp(); compRendered=true; }">Composition</button>
+        </div>
+      </div>
+      {% if has_history %}
+        <div x-show="mode==='trend'"><div id="nw-trend" data-dates='{{ trend_dates | tojson }}' data-totals='{{ trend_totals | tojson }}'></div></div>
+        <div x-show="mode==='composition'" x-cloak><div id="nw-comp" data-dates='{{ trend_dates | tojson }}' data-series='{{ comp_series | tojson }}'></div></div>
+      {% else %}
+        <div class="text-center py-16 muted">
+          <p class="text-2xl mb-2">📈</p>
+          <p>Not enough history yet. Take a few snapshots to see the trend.</p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+<script>
+  (function () {
+    function render() {
+      if (!window.Steward || !window.ApexCharts) return;
+      var donut = document.getElementById("nw-donut");
+      if (donut) Steward.donut(donut, JSON.parse(donut.dataset.labels), JSON.parse(donut.dataset.values));
+      var trend = document.getElementById("nw-trend");
+      if (trend) Steward.areaTrend(trend, JSON.parse(trend.dataset.dates), JSON.parse(trend.dataset.totals));
+      window.__renderNwComp = function () {
+        var c = document.getElementById("nw-comp");
+        if (c) Steward.stackedArea(c, JSON.parse(c.dataset.dates), JSON.parse(c.dataset.series));
+      };
+    }
+    if (window.Steward && window.ApexCharts) render();
+    else document.addEventListener("DOMContentLoaded", render);
+  })();
+</script>

@@ -1,0 +1,62 @@
+{# Reusable UI macros #}
+
+{% macro bar(pct, state, label='') %}
+  {% set w = pct if pct < 100 else 100 %}
+  <div class="bar {{ 'is-warn' if state == 'warn' else 'is-over' if state == 'over' else '' }}"
+       role="progressbar" aria-valuenow="{{ pct }}" aria-valuemin="0" aria-valuemax="100"
+       aria-valuetext="{{ pct }}% spent{{ ' — over budget' if state == 'over' }}"
+       {% if label %}aria-label="{{ label }}"{% endif %}>
+    <div class="fill" style="width: {{ w }}%"></div>
+  </div>
+{% endmacro %}
+
+{% macro state_dot(state) %}
+  <span class="inline-block h-2 w-2 rounded-full
+    {{ 'bg-primary' if state in ('ok','none') else 'bg-warn' if state == 'warn' else 'bg-danger' }}"></span>
+{% endmacro %}
+
+{% macro txn_icon(t) %}
+  {% if t.type == 'transfer' %}🔄
+  {% elif t.type == 'income' %}⬇️
+  {% elif t.type == 'savings' %}{{ t.category.icon if t.category else ('💰' if t.flow != 'in' else '💵') }}
+  {% else %}{{ t.category.icon if t.category else '🔖' }}{% endif %}
+{% endmacro %}
+
+{# Click-to-edit planned amount. Posts on change; grid refreshes via steward-refresh. #}
+{% macro planned_cell(month, category_id, planned) %}
+<span x-data="{ edit: false }" class="inline-flex items-center justify-end">
+  <button type="button" x-show="!edit"
+          @click="edit=true; $nextTick(() => $refs.inp && $refs.inp.focus())"
+          class="money hover:text-primary underline decoration-dotted decoration-ink-soft/40 underline-offset-4">{{ planned | inr0 }}</button>
+  <form x-show="edit" x-cloak class="inline-flex"
+        hx-post="{{ url_for('budgets.save_line', month=month.strftime('%Y-%m')) }}"
+        hx-trigger="change" hx-swap="none">
+    <input type="hidden" name="category_id" value="{{ category_id }}">
+    <span class="inline-flex items-center rounded-lg border border-primary/40 bg-surface px-1">
+      <span class="muted text-sm">₹</span>
+      <input x-ref="inp" name="planned_amount" value="{{ planned }}" inputmode="decimal"
+             class="w-20 bg-transparent py-1 px-1 text-right text-sm money focus:outline-none"
+             @keydown.enter.prevent="$refs.inp.blur()" @blur="edit=false">
+    </span>
+  </form>
+</span>
+{% endmacro %}
+
+{# Reverse "earmarked for <goal>" chips shown on a holding/deposit card. #}
+{% macro earmark_line(earmarks, kind, ref_id) %}
+  {% set items = (earmarks or {}).get(kind, {}).get(ref_id) %}
+  {% if items %}
+    <div class="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+      <span class="muted">🎯 Earmarked:</span>
+      {% for it in items %}
+        <span class="chip-primary">{{ it.icon }} {{ it.name }} · {{ it.amount | inr0 }}</span>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endmacro %}
+
+{% macro amount(value, kind='') %}
+  <span class="money {{ 'text-primary' if kind == 'income' else 'text-danger' if kind == 'expense-neg' else '' }}">
+    {{ value | inr }}
+  </span>
+{% endmacro %}

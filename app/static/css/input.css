@@ -1,0 +1,266 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------------------------------------------------------------------------
+   Design tokens — every colour defined once, as "R G B" channels so Tailwind
+   alpha utilities work. Light = warm off-white paper + deep green. Dark = deep
+   warm charcoal with brightened hues. Red is reserved for negative/overshoot.
+--------------------------------------------------------------------------- */
+@layer base {
+  /* Brand = violet/purple. --c-on-primary is the text colour that sits on a
+     primary fill (white in light, near-black in dark) so buttons always meet
+     contrast. --c-gold-ink is the accessible text colour for gold/amber chips. */
+  :root {
+    --c-paper: 250 247 246;
+    --c-surface: 255 253 253;
+    --c-surface-2: 244 241 249;
+    --c-ink: 33 30 40;
+    --c-ink-soft: 99 94 112;
+    --c-border: 228 222 234;
+    --c-primary: 109 40 217;          /* violet-700  (white text 7.1:1) */
+    --c-primary-strong: 91 33 182;    /* violet-800 hover */
+    --c-primary-soft: 237 233 254;    /* violet-100 tint */
+    --c-on-primary: 255 255 255;
+    --c-gold: 176 128 20;
+    --c-gold-soft: 245 234 205;
+    --c-gold-ink: 138 90 0;           /* dark amber for text on soft (5.5:1) */
+    --c-danger: 185 51 42;
+    --c-danger-soft: 247 221 217;
+    --c-warn: 190 128 20;
+    --c-warn-soft: 248 235 208;
+    color-scheme: light;
+  }
+
+  .dark {
+    --c-paper: 23 21 28;
+    --c-surface: 33 29 43;
+    --c-surface-2: 44 39 57;
+    --c-ink: 236 233 242;
+    --c-ink-soft: 170 166 184;
+    --c-border: 58 52 74;
+    --c-primary: 167 139 250;         /* violet-400 (accent/links 6.05:1) */
+    --c-primary-strong: 196 181 253;  /* violet-300 hover */
+    --c-primary-soft: 45 35 66;
+    --c-on-primary: 26 22 37;         /* dark text on the bright fill (6.5:1) */
+    --c-gold: 226 180 92;
+    --c-gold-soft: 62 52 30;
+    --c-gold-ink: 226 180 92;         /* bright gold reads on dark soft (6.4:1) */
+    --c-danger: 233 118 104;
+    --c-danger-soft: 66 40 38;
+    --c-warn: 226 180 92;
+    --c-warn-soft: 58 48 26;
+    color-scheme: dark;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    @apply bg-paper text-ink font-body antialiased;
+  }
+
+  h1, h2, h3, .font-display { font-family: theme('fontFamily.display'); }
+
+  /* Tabular numerals everywhere money lives */
+  .tnum { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition-duration: 0.001ms !important; animation-duration: 0.001ms !important; }
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Components
+--------------------------------------------------------------------------- */
+@layer components {
+  .card {
+    @apply bg-surface border border-line rounded-2xl shadow-card;
+  }
+  .card-pad { @apply p-5 sm:p-6; }
+
+  .muted { @apply text-ink-soft; }
+
+  .money { @apply tnum tracking-tight; }
+
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5
+           text-sm font-medium transition-colors select-none
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50;
+  }
+  .btn-primary {
+    @apply btn bg-primary hover:bg-primary-strong shadow-sm;
+    color: rgb(var(--c-on-primary));
+  }
+  /* Text/glyph colour for anything sitting on a primary fill (logo, FAB). */
+  .text-on-primary { color: rgb(var(--c-on-primary)); }
+  .btn-ghost {
+    @apply btn bg-transparent text-ink hover:bg-surface-2 border border-line;
+  }
+  .btn-soft {
+    @apply btn bg-primary-soft text-primary-strong hover:brightness-95;
+  }
+  .btn-danger {
+    @apply btn bg-danger text-white hover:brightness-110;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+  .chip-neutral { @apply chip bg-surface-2 text-ink-soft; }
+  .chip-primary { @apply chip bg-primary-soft text-primary-strong; }
+  .chip-gold    { @apply chip bg-gold-soft; color: rgb(var(--c-gold-ink)); }
+  .chip-danger  { @apply chip bg-danger-soft text-danger; }
+  .chip-warn    { @apply chip bg-warn-soft; color: rgb(var(--c-gold-ink)); }
+
+  .field-label { @apply block text-xs font-medium muted mb-1; }
+  .field-input {
+    @apply w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm text-ink
+           placeholder:text-ink-soft/60
+           focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40;
+  }
+  select.field-input { @apply pr-8; }
+
+  /* Row action buttons (duplicate / delete on list rows). Always visible &
+     tappable on touch devices; on hover-capable pointers (desktop mouse) they
+     stay hidden until the row is hovered or the button is keyboard-focused, so
+     the list stays uncluttered. Per-button hover colours (utilities) still win. */
+  .row-action { @apply transition-opacity muted p-1 rounded-lg; opacity: 1; }
+  @media (hover: hover) and (pointer: fine) {
+    .row-action { opacity: 0; }
+    .group:hover .row-action,
+    .row-action:focus-visible { opacity: 1; }
+  }
+
+  /* -----------------------------------------------------------------------
+     Signature component: the budget progress bar.
+  ----------------------------------------------------------------------- */
+  .bar {
+    @apply relative w-full overflow-hidden rounded-full;
+    height: 0.65rem;
+    background: rgb(var(--c-surface-2));
+    box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.06);
+  }
+  .bar > .fill {
+    @apply absolute inset-y-0 left-0 rounded-full;
+    width: 0;
+    transition: width 700ms cubic-bezier(0.22, 1, 0.36, 1),
+                background-color 400ms ease;
+    background: linear-gradient(90deg,
+                rgb(var(--c-primary)) 0%, rgb(var(--c-primary-strong)) 100%);
+  }
+  .bar > .fill::after {
+    content: "";
+    @apply absolute inset-y-0 right-0 w-1 rounded-full;
+    background: rgb(255 255 255 / 0.55);
+    mix-blend-mode: overlay;
+  }
+  .bar.is-warn > .fill {
+    background: linear-gradient(90deg, rgb(var(--c-gold)) 0%, rgb(var(--c-warn)) 100%);
+  }
+  .bar.is-over > .fill {
+    background: linear-gradient(90deg, rgb(var(--c-danger)) 0%, rgb(220 80 70) 100%);
+  }
+
+  /* Nav */
+  .nav-link {
+    @apply flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
+           text-ink-soft hover:text-ink hover:bg-surface-2 transition-colors;
+  }
+  .nav-link.active {
+    @apply bg-primary-soft text-primary-strong;
+  }
+
+  .bottom-link {
+    @apply flex flex-col items-center justify-center gap-0.5 flex-1 py-2 text-[0.68rem]
+           text-ink-soft;
+  }
+  .bottom-link.active { @apply text-primary; }
+
+  /* Skeleton loader */
+  .skeleton {
+    @apply rounded-md bg-surface-2;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+  /* Toasts */
+  .toast {
+    @apply card card-pad shadow-pop max-w-sm w-full pointer-events-auto;
+  }
+
+  /* Slide-over / overlay animation via a single custom class (Alpine object
+     binding). Avoids Tailwind dynamic-class detection + the dual --tw-translate
+     conflict entirely. */
+  .slideover-backdrop {
+    opacity: 0; pointer-events: none;
+    transition: opacity 200ms ease;
+  }
+  .slideover-backdrop.is-open { opacity: 1; pointer-events: auto; }
+
+  .slideover-panel {
+    transform: translateX(100%);
+    transition: transform 250ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .slideover-panel.is-open { transform: translateX(0); }
+
+  .slideover-panel-left { transform: translateX(-100%); }
+  .slideover-panel-left.is-open { transform: translateX(0); }
+
+  .overlay-fade { opacity: 0; pointer-events: none; transition: opacity 180ms ease; }
+  .overlay-fade.is-open { opacity: 1; pointer-events: auto; }
+
+  .modal-panel {
+    opacity: 0; transform: translateY(10px) scale(0.98);
+    transition: opacity 180ms ease, transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .modal-panel.is-open { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* htmx: subtle fade for swapped content */
+.htmx-swapping { opacity: 0; transition: opacity 120ms ease-out; }
+.htmx-settling { opacity: 1; }
+[x-cloak] { display: none !important; }
+
+/* Global loading bar */
+#steward-loadbar {
+  position: fixed; top: 0; left: 0; height: 3px; width: 0;
+  background: linear-gradient(90deg, rgb(var(--c-primary)), rgb(var(--c-gold)));
+  z-index: 100; opacity: 0; transition: width 300ms ease, opacity 200ms ease;
+}
+#steward-loadbar.on { width: 92%; opacity: 1; transition: width 8s cubic-bezier(0.1, 0.6, 0.2, 1), opacity 200ms ease; }
+
+/* Buttons show a busy state while their htmx request is in flight */
+button.htmx-request, .htmx-request > button {
+  opacity: 0.7; pointer-events: none; position: relative;
+}
+button.htmx-request::after {
+  content: ""; position: absolute; inset: 0; margin: auto;
+  width: 0.9rem; height: 0.9rem; border-radius: 9999px;
+  border: 2px solid currentColor; border-right-color: transparent;
+  animation: spin 0.6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Skeleton shimmer for price-dependent panels */
+.skeleton-line { @apply skeleton h-4 rounded; }
+
+/* Responsive tables: collapse rows into stacked cards on small screens,
+   using each cell's data-label as its inline label. */
+@media (max-width: 640px) {
+  table.rtable thead { display: none; }
+  table.rtable tbody tr {
+    display: block; padding: 0.35rem 0;
+    border-bottom: 1px solid rgb(var(--c-border));
+  }
+  table.rtable tbody tr:last-child { border-bottom: 0; }
+  table.rtable td {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 1rem; padding: 0.3rem 1rem; text-align: right; border: 0;
+  }
+  table.rtable td[data-label]:not([data-label=""])::before {
+    content: attr(data-label);
+    color: rgb(var(--c-ink-soft)); font-size: 0.72rem; font-weight: 500;
+    text-align: left; white-space: nowrap;
+  }
+}

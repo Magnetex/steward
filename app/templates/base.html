@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{% block title %}Steward{% endblock %}</title>
+  <meta name="theme-color" content="#6D28D9" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#17151C" media="(prefers-color-scheme: dark)">
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
+  <link rel="icon" href="{{ url_for('static', filename='icons/icon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <!-- Set theme before paint to avoid a flash -->
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('steward-theme');
+        if (!t) {
+          t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark'
+              : ('{{ server_theme }}' || 'light');
+        }
+        if (t === 'dark') document.documentElement.classList.add('dark');
+      } catch (e) {}
+    })();
+  </script>
+  <!-- app.js is a blocking head script so its Alpine.data() registrations run
+       before Alpine's deferred script starts (order-proof). -->
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='vendor/htmx.min.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='vendor/apexcharts.min.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='vendor/alpine.min.js') }}"></script>
+</head>
+<body class="h-full min-h-full" x-data="stewardShell()">
+
+  {% set navgroups = [
+    ('Money', [
+      ('dashboard.index', '🏠', 'Dashboard'),
+      ('transactions.index', '💳', 'Transactions'),
+      ('budgets.index', '📊', 'Budget'),
+      ('recurring.index', '🔁', 'Recurring'),
+    ]),
+    ('Grow', [
+      ('funds.index', '🎯', 'Sinking funds'),
+      ('savings.index', '📈', 'Savings'),
+      ('networth.index', '💠', 'Net worth'),
+    ]),
+    ('Insights', [
+      ('reports.index', '📑', 'Reports'),
+      ('tax.index', '🧾', 'Tax'),
+    ]),
+    ('Setup', [
+      ('accounts.index', '🏦', 'Accounts'),
+      ('categories.index', '🏷️', 'Categories'),
+      ('settings.index', '⚙️', 'Settings'),
+    ]),
+  ] %}
+
+  <div class="flex min-h-full">
+    <!-- Sidebar (desktop) -->
+    <aside class="hidden lg:flex lg:flex-col w-64 shrink-0 border-r border-line bg-surface/60 backdrop-blur px-3 py-4 sticky top-0 h-screen">
+      <a href="{{ url_for('dashboard.index') }}" class="flex items-center gap-2.5 px-2 mb-6">
+        <span class="grid place-items-center h-9 w-9 rounded-xl bg-primary text-on-primary text-lg">◆</span>
+        <span class="font-display text-xl leading-none">Steward</span>
+      </a>
+      <nav class="flex-1 space-y-4 overflow-y-auto">
+        {% for section, items in navgroups %}
+          <div>
+            <p class="px-3 mb-1 text-[0.65rem] font-semibold uppercase tracking-wider text-ink-soft/70">{{ section }}</p>
+            <div class="space-y-0.5">
+              {% for endpoint, icon, label in items %}
+                <a href="{{ url_for(endpoint) }}"
+                   class="nav-link {{ 'active' if request.endpoint and request.blueprint == endpoint.split('.')[0] else '' }}">
+                  <span class="text-base w-5 text-center">{{ icon }}</span>{{ label }}
+                </a>
+              {% endfor %}
+            </div>
+          </div>
+        {% endfor %}
+      </nav>
+      <div class="pt-3 mt-3 border-t border-line">
+        <button class="nav-link w-full" @click="toggleTheme()">
+          <span class="text-base w-5 text-center" x-text="dark ? '☀️' : '🌙'"></span>
+          <span x-text="dark ? 'Light mode' : 'Dark mode'"></span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main column -->
+    <div class="flex-1 min-w-0 flex flex-col">
+      <!-- Top bar -->
+      <header class="sticky top-0 z-30 bg-paper/85 backdrop-blur border-b border-line">
+        <div class="max-w-container mx-auto px-4 sm:px-6 h-14 flex items-center gap-3">
+          <a href="{{ url_for('dashboard.index') }}" class="lg:hidden flex items-center gap-2">
+            <span class="grid place-items-center h-8 w-8 rounded-lg bg-primary text-on-primary">◆</span>
+            <span class="font-display text-lg">Steward</span>
+          </a>
+          <div class="flex-1"></div>
+
+          <!-- Alert bell -->
+          <div class="relative" x-data="{ open: false }" @keydown.escape.window="open=false">
+            <button class="relative grid place-items-center h-10 w-10 rounded-xl hover:bg-surface-2"
+                    @click="open=!open" hx-get="{{ url_for('api.alerts_panel') }}"
+                    hx-target="#alert-panel" hx-trigger="click" aria-label="Alerts">
+              <span class="text-lg">🔔</span>
+              {% if nav_unread %}
+                <span class="absolute -top-0.5 -right-0.5 min-w-[1.15rem] h-[1.15rem] px-1 grid place-items-center
+                             text-[0.65rem] font-semibold text-white bg-danger rounded-full">{{ nav_unread }}</span>
+              {% endif %}
+            </button>
+            <div x-show="open" x-cloak @click.outside="open=false"
+                 class="absolute right-0 mt-2 w-80 card shadow-pop overflow-hidden z-40 origin-top-right">
+              <div id="alert-panel"><div class="p-4 muted text-sm">Loading…</div></div>
+            </div>
+          </div>
+
+          <button class="btn-ghost lg:hidden" @click="menuOpen=true" aria-label="Menu">☰</button>
+          <a href="{{ url_for('dashboard.index') }}" class="btn-primary hidden sm:inline-flex"
+             @click.prevent="$dispatch('open-add')">
+            <span class="text-base leading-none">＋</span> Add
+          </a>
+        </div>
+      </header>
+
+      <!-- Page content -->
+      <main class="flex-1 w-full max-w-container mx-auto px-4 sm:px-6 py-6 pb-28 lg:pb-10">
+        {% include "partials/flashes.html" %}
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+
+  <!-- Mobile slide-over menu -->
+  <div x-cloak class="lg:hidden fixed inset-0 z-50" :class="{ 'pointer-events-none': !menuOpen }"
+       @keydown.escape.window="menuOpen=false">
+    <div class="slideover-backdrop absolute inset-0 bg-black/40" :class="{ 'is-open': menuOpen }"
+         @click="menuOpen=false"></div>
+    <div class="slideover-panel absolute right-0 top-0 h-full w-72 bg-surface border-l border-line p-4 overflow-y-auto"
+         :class="{ 'is-open': menuOpen }">
+      <div class="flex items-center justify-between mb-4">
+        <span class="font-display text-lg">Menu</span>
+        <button class="btn-ghost !px-2 !py-1" aria-label="Close" @click="menuOpen=false">✕</button>
+      </div>
+      <nav class="space-y-4">
+        {% for section, items in navgroups %}
+          <div>
+            <p class="px-3 mb-1 text-[0.65rem] font-semibold uppercase tracking-wider text-ink-soft/70">{{ section }}</p>
+            <div class="space-y-0.5">
+              {% for endpoint, icon, label in items %}
+                <a href="{{ url_for(endpoint) }}" class="nav-link {{ 'active' if request.blueprint == endpoint.split('.')[0] else '' }}">
+                  <span class="w-5 text-center">{{ icon }}</span>{{ label }}
+                </a>
+              {% endfor %}
+            </div>
+          </div>
+        {% endfor %}
+        <button class="nav-link w-full" @click="toggleTheme()">
+          <span class="w-5 text-center" x-text="dark ? '☀️' : '🌙'"></span>
+          <span x-text="dark ? 'Light mode' : 'Dark mode'"></span>
+        </button>
+      </nav>
+    </div>
+  </div>
+
+  <!-- Bottom nav (mobile) -->
+  {% set bottomnav = [
+    ('dashboard.index', '🏠', 'Home'),
+    ('budgets.index', '📊', 'Budget'),
+    ('transactions.index', '💳', 'Activity'),
+    ('savings.index', '📈', 'Savings'),
+  ] %}
+  <nav class="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-surface/95 backdrop-blur border-t border-line
+              flex items-stretch px-2 pb-[env(safe-area-inset-bottom)]">
+    {% for endpoint, icon, label in bottomnav[:2] %}
+      <a href="{{ url_for(endpoint) }}" class="bottom-link {{ 'active' if request.blueprint == endpoint.split('.')[0] else '' }}">
+        <span class="text-lg leading-none">{{ icon }}</span>{{ label }}</a>
+    {% endfor %}
+    <div class="flex-1 grid place-items-center">
+      <button class="h-12 w-12 -mt-5 rounded-full bg-primary text-on-primary text-2xl shadow-pop grid place-items-center"
+              @click="$dispatch('open-add')" aria-label="Add transaction">＋</button>
+    </div>
+    {% for endpoint, icon, label in bottomnav[2:] %}
+      <a href="{{ url_for(endpoint) }}" class="bottom-link {{ 'active' if request.blueprint == endpoint.split('.')[0] else '' }}">
+        <span class="text-lg leading-none">{{ icon }}</span>{{ label }}</a>
+    {% endfor %}
+  </nav>
+
+  <!-- Toasts -->
+  <div id="toast-host" class="fixed z-[60] bottom-20 lg:bottom-4 right-4 flex flex-col gap-2 items-end pointer-events-none"></div>
+
+  {% include "partials/txn_form.html" %}
+  {% block modals %}{% endblock %}
+  {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Recurring · Steward{% endblock %}
+{% block content %}
+<div x-data="recurringPage()" data-today="{{ today }}">
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+    <h1 class="font-display text-3xl">Recurring &amp; reminders</h1>
+    <div class="flex items-center gap-2">
+      <button class="btn-ghost" hx-post="{{ url_for('recurring.run_now') }}" hx-swap="none">Run due now</button>
+      <button class="btn-primary" @click="openNew()"><span class="text-base leading-none">＋</span> Add rule</button>
+    </div>
+  </div>
+
+  <!-- Upcoming -->
+  <section class="mb-6">
+    <h2 class="font-display text-lg mb-2">Due in the next 14 days</h2>
+    {% if upcoming %}
+      <div class="card divide-y divide-line">
+        {% for rule in upcoming %}
+          <div class="flex items-center gap-3 px-4 py-3">
+            <span class="grid place-items-center h-9 w-9 rounded-xl bg-surface-2 shrink-0">
+              {{ '🔁' if rule.mode == 'auto_create' else '🔔' }}</span>
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-medium truncate">{{ rule.payee or 'Recurring' }}</p>
+              <p class="text-xs muted">Due {{ rule.next_due_date.strftime('%d %b') }} ·
+                {{ 'auto' if rule.mode == 'auto_create' else 'reminder' }}</p>
+            </div>
+            <span class="money text-sm font-medium">{{ rule.amount | inr0 }}</span>
+            {% if rule.mode == 'remind_only' %}
+              <button class="btn-soft !py-1 !px-3 text-xs" hx-post="{{ url_for('recurring.record_it', rule_id=rule.id) }}" hx-swap="none">Record it</button>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="card card-pad text-sm muted">Nothing due soon. 🌿</div>
+    {% endif %}
+  </section>
+
+  <!-- All rules -->
+  <h2 class="font-display text-lg mb-2">All rules</h2>
+  {% if rules %}
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {% for rule in rules %}
+        <div class="card card-pad {{ 'opacity-60' if not rule.active }}">
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
+              <p class="font-medium truncate">{{ rule.payee or 'Recurring' }}</p>
+              <p class="text-xs muted mt-0.5">
+                {{ rule.type }} · {{ rule.frequency }}
+                {% if rule.frequency == 'monthly' %}(day {{ rule.day_of_month }}){% endif %}
+                · {{ 'auto-create' if rule.mode == 'auto_create' else 'remind only' }}
+              </p>
+              <p class="text-xs muted mt-0.5">Next: {{ rule.next_due_date.strftime('%d %b %Y') if rule.next_due_date else '—' }}</p>
+            </div>
+            <span class="font-display text-lg money shrink-0">{{ rule.amount | inr0 }}</span>
+          </div>
+          <div class="flex items-center gap-3 mt-3 text-sm">
+            <button class="text-primary hover:underline"
+                    @click='openEdit({{ {"id": rule.id, "payee": rule.payee, "amount": rule.amount|string, "type": rule.type, "category_id": rule.category_id or "", "account_id": rule.account_id, "transfer_account_id": rule.transfer_account_id or "", "frequency": rule.frequency, "day_of_month": rule.day_of_month, "weekday": rule.weekday, "month_of_year": rule.month_of_year, "next_due_date": rule.next_due_date.isoformat() if rule.next_due_date else "", "mode": rule.mode, "note": rule.note, "tags": rule.tags, "active": rule.active} | tojson }})'>Edit</button>
+            <form method="post" action="{{ url_for('recurring.toggle', rule_id=rule.id) }}">
+              <button class="text-ink-soft hover:text-ink">{{ 'Pause' if rule.active else 'Resume' }}</button>
+            </form>
+            <form method="post" action="{{ url_for('recurring.delete', rule_id=rule.id) }}"
+                  onsubmit="return confirm('Delete this rule?')" class="ml-auto">
+              <button class="text-danger hover:underline">Delete</button>
+            </form>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="card card-pad text-center py-10">
+      <p class="text-2xl mb-2">🔁</p>
+      <p class="muted mb-4">No recurring rules yet.</p>
+      <button class="btn-primary" @click="openNew()">Add your first rule</button>
+    </div>
+  {% endif %}
+
+  {% include "recurring/_modal.html" %}
+</div>
+{% endblock %}

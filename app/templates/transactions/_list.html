@@ -1,0 +1,31 @@
+<div>
+  <!-- Running totals for the whole filtered set (not just this page) -->
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+    <div class="card card-pad !py-3">
+      <p class="text-xs muted">Transactions</p>
+      <p class="font-display text-xl">{{ result.count }}</p>
+    </div>
+    <div class="card card-pad !py-3">
+      <p class="text-xs muted">Income</p>
+      <p class="font-display text-xl money text-primary">{{ result.income | inr0 }}</p>
+    </div>
+    <div class="card card-pad !py-3">
+      <p class="text-xs muted">Spent</p>
+      <p class="font-display text-xl money">{{ result.expense | inr0 }}</p>
+    </div>
+    <div class="card card-pad !py-3">
+      <p class="text-xs muted">Net</p>
+      <p class="font-display text-xl money {{ 'text-danger' if result.net < 0 else 'text-primary' }}">{{ result.net | inr0 }}</p>
+    </div>
+    {% if result.savings %}
+    <div class="card card-pad !py-3">
+      <p class="text-xs muted">Saved</p>
+      <p class="font-display text-xl money text-primary">{{ result.savings | inr0 }}</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="card divide-y divide-line" id="txn-rows">
+    {% include "transactions/_rows.html" %}
+  </div>
+</div>

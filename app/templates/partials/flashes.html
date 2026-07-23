@@ -1,0 +1,22 @@
+{# Flash messages are surfaced through the same toast system as htmx actions,
+   so there is one consistent notification language across the app. #}
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <script>
+      (function () {
+        var msgs = {{ messages | tojson }};
+        function fire() {
+          if (!window.Steward) { return setTimeout(fire, 50); }
+          msgs.forEach(function (m) {
+            var cat = m[0];
+            var kind = (cat === 'error' || cat === 'danger') ? 'error'
+                     : (cat === 'warn' || cat === 'warning') ? 'warn' : 'success';
+            window.Steward.toast({ kind: kind, message: m[1] });
+          });
+        }
+        if (document.readyState === 'complete') fire();
+        else window.addEventListener('load', fire);
+      })();
+    </script>
+  {% endif %}
+{% endwith %}

@@ -1,0 +1,58 @@
+{% from "_macros.html" import txn_icon %}
+{% for t in result.rows %}
+  {% set inv_tab = {'mf': 'mf', 'gold': 'gold', 'deposit': 'deposits', 'epf': 'epf', 'stock': 'stock'}.get(t.invest_kind) %}
+  <div class="group flex items-center gap-3 px-4 py-3 hover:bg-surface-2/50 transition-colors">
+    <span class="grid place-items-center h-9 w-9 rounded-xl bg-surface-2 shrink-0">{{ txn_icon(t) }}</span>
+    {% if t.type == 'savings' %}
+      {# Savings rows are created & owned by the Savings records — read-only
+         here; clicking jumps to where they're managed rather than editing. #}
+      <a class="min-w-0 flex-1 text-left {{ '' if inv_tab else 'pointer-events-none' }}"
+         href="{{ url_for('savings.index', tab=inv_tab) if inv_tab else '#' }}"
+         title="Managed from Savings">
+    {% else %}
+      <button type="button" class="min-w-0 flex-1 text-left" @click="$dispatch('open-edit', { id: {{ t.id }} })">
+    {% endif %}
+      <p class="text-sm font-medium truncate">
+        {{ t.payee or (t.category.name if t.category else ('Transfer' if t.type=='transfer' else ('Savings' if t.type=='savings' else 'Uncategorised'))) }}
+      </p>
+      <p class="text-xs muted truncate">
+        {{ t.date.strftime('%d %b %Y') }}
+        · {{ t.account.name }}{% if t.type == 'transfer' and t.transfer_account %} → {{ t.transfer_account.name }}{% endif %}
+        {% if t.type == 'savings' %} · {{ 'Redeemed' if t.flow == 'in' else 'Saved' }} · via Savings{% endif %}
+        {% if t.category %} · {{ t.category.name }}{% elif t.has_splits %} · Split ({{ t.splits|length }}){% endif %}
+      </p>
+      {% if t.tag_list %}
+        <div class="flex flex-wrap gap-1 mt-1">
+          {% for tag in t.tag_list %}<span class="chip-neutral">{{ tag }}</span>{% endfor %}
+        </div>
+      {% endif %}
+    {% if t.type == 'savings' %}</a>{% else %}</button>{% endif %}
+    <div class="flex items-center gap-2 shrink-0">
+      <span class="money text-sm font-semibold
+        {{ 'text-primary' if t.type == 'income' or (t.type == 'savings' and t.flow == 'in') else 'text-ink-soft' if t.type == 'transfer' else 'text-ink' }}">
+        {{ '+' if t.type == 'income' or (t.type == 'savings' and t.flow == 'in') }}{{ '−' if t.type == 'expense' or (t.type == 'savings' and t.flow != 'in') }}{{ t.amount | inr }}
+      </span>
+      {% if t.type != 'savings' %}
+        <button type="button" class="row-action hover:text-primary"
+                @click="$dispatch('open-duplicate', { id: {{ t.id }} })"
+                aria-label="Duplicate transaction" title="Duplicate">⧉</button>
+        <button type="button" class="row-action hover:text-danger"
+                hx-post="{{ url_for('transactions.delete', txn_id=t.id) }}"
+                hx-confirm="Delete this transaction?" hx-swap="none" aria-label="Delete transaction">🗑</button>
+      {% endif %}
+    </div>
+  </div>
+{% else %}
+  <div class="px-4 py-12 text-center muted">
+    <p class="text-2xl mb-2">🍃</p>
+    <p>No transactions match these filters.</p>
+  </div>
+{% endfor %}
+{% if result.has_more %}
+  <button type="button"
+          class="w-full px-4 py-3 text-sm text-primary hover:bg-surface-2/50 transition-colors font-medium"
+          hx-get="{{ url_for('transactions.rows') }}?page={{ result.page + 1 }}"
+          hx-include="#txn-filters" hx-swap="outerHTML">
+    Load more · {{ result.count - result.shown }} left
+  </button>
+{% endif %}

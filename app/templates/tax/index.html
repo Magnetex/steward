@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% from "_macros.html" import bar %}
+{% block title %}Tax · Steward{% endblock %}
+{% block content %}
+<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+  <h1 class="font-display text-3xl">Tax</h1>
+  <div class="flex items-center gap-2">
+    <a href="{{ url_for('tax.index', fy=prev_fy) }}" class="btn-ghost !px-3" aria-label="Previous financial year">◀</a>
+    <span class="font-display text-lg">FY {{ fy_label }}</span>
+    <a href="{{ url_for('tax.index', fy=next_fy) }}" class="btn-ghost !px-3" aria-label="Next financial year">▶</a>
+  </div>
+</div>
+
+<div class="card card-pad !py-3 mb-6 border-l-4 border-l-warn flex items-start gap-3">
+  <span>⚠️</span>
+  <p class="text-sm muted">Rates are user-configurable in
+    <a href="{{ url_for('settings.index') }}" class="text-primary underline">Settings</a> and seeded with current
+    Indian defaults. Verify against current law — this is a report, not tax advice.</p>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <!-- Capital gains -->
+  <section class="lg:col-span-2 space-y-4">
+    <div class="card">
+      <div class="card-pad !py-4 border-b border-line flex items-center justify-between">
+        <h2 class="font-display text-lg">Capital gains</h2>
+        <div class="text-right">
+          <p class="text-xs muted">Estimated tax</p>
+          <p class="font-display text-xl money {{ 'text-danger' if gains.total_tax > 0 else '' }}">{{ gains.total_tax | inr0 }}</p>
+        </div>
+      </div>
+      <div class="divide-y divide-line">
+        {% for key, b in gains.buckets.items() %}
+          {% if b.gain != 0 or b.tax != 0 %}
+            <div class="px-5 py-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm items-center">
+              <span class="font-medium col-span-2 sm:col-span-1">{{ bucket_labels[key] }}</span>
+              <span class="money">Gain {{ b.gain | inr0 }}</span>
+              <span class="money muted">Taxable {{ b.taxable | inr0 }}</span>
+              <span class="money text-right {{ 'text-danger' if b.tax > 0 else '' }}">{{ b.tax | inr0 }} <span class="muted text-xs">@ {{ b.rate }}%</span></span>
+            </div>
+          {% endif %}
+        {% endfor %}
+        {% if gains.total_gain == 0 and gains.total_tax == 0 %}
+          <div class="px-5 py-8 text-center muted text-sm">No realized capital gains in FY {{ fy_label }}.</div>
+        {% endif %}
+      </div>
+      {% if gains.buckets.equity_ltcg.gain > 0 %}
+        <div class="px-5 py-2 text-xs muted border-t border-line">
+          Equity LTCG exemption of {{ gains.equity_exemption | inr0 }} applied.
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- Realized events -->
+    {% if gains.events %}
+      <div class="card sm:overflow-x-auto">
+        <table class="rtable w-full text-sm">
+          <thead class="text-xs muted"><tr class="border-b border-line">
+            <th class="text-left font-medium px-4 py-2">Sold</th>
+            <th class="text-left font-medium px-4 py-2">Asset</th>
+            <th class="text-right font-medium px-4 py-2">Cost</th>
+            <th class="text-right font-medium px-4 py-2">Proceeds</th>
+            <th class="text-right font-medium px-4 py-2">Gain</th>
+            <th class="text-left font-medium px-4 py-2">Term</th>
+          </tr></thead>
+          <tbody class="divide-y divide-line">
+            {% for e in gains.events %}
+              <tr>
+                <td class="px-4 py-2" data-label="Sold">{{ e.sell_date.strftime('%d %b %Y') }}</td>
+                <td class="px-4 py-2 sm:truncate sm:max-w-[12rem]" data-label="Asset">{{ e.name }}</td>
+                <td class="px-4 py-2 text-right money" data-label="Cost">{{ e.cost | inr0 }}</td>
+                <td class="px-4 py-2 text-right money" data-label="Proceeds">{{ e.proceeds | inr0 }}</td>
+                <td class="px-4 py-2 text-right money {{ 'text-danger' if e.gain < 0 else 'text-primary' }}" data-label="Gain">{{ e.gain | inr0 }}</td>
+                <td class="px-4 py-2" data-label="Term">{{ e.months }}mo · {{ e.term }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  </section>
+
+  <!-- 80C -->
+  <section>
+    <div class="card card-pad">
+      <h2 class="font-display text-lg mb-1">Section 80C</h2>
+      <p class="muted text-xs mb-4">FY {{ fy_label }} · limit {{ eighty_c.limit | inr0 }}</p>
+      <p class="font-display text-3xl money mb-1">{{ eighty_c.used | inr0 }}</p>
+      <p class="text-xs muted mb-3">{{ eighty_c.remaining | inr0 }} of headroom left</p>
+      {{ bar(eighty_c.pct, 'ok' if eighty_c.pct < 100 else 'warn') }}
+      <div class="mt-4 space-y-2 text-sm">
+        <div class="flex items-center justify-between">
+          <span class="muted">EPF (employee)</span><span class="money">{{ eighty_c.epf | inr0 }}</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="muted">Tagged 80C (e.g. ELSS)</span><span class="money">{{ eighty_c.tagged | inr0 }}</span>
+        </div>
+      </div>
+      <p class="text-xs muted mt-4">Tag ELSS SIPs with <span class="chip-gold">80C</span> when adding them to count here.</p>
+    </div>
+  </section>
+</div>
+{% endblock %}

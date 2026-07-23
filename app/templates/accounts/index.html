@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Accounts · Steward{% endblock %}
+{% block content %}
+<div x-data="accountsPage()">
+  <div class="flex items-center justify-between mb-5">
+    <div>
+      <h1 class="font-display text-3xl">Accounts</h1>
+      <p class="muted text-sm mt-1">
+        Available <span class="money font-medium text-ink">{{ available | inr0 }}</span>
+      </p>
+    </div>
+    <button class="btn-primary" @click="openNew()">
+      <span class="text-base leading-none">＋</span> Add account
+    </button>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    {% for account, balance in pairs %}
+      <div class="card card-pad {{ 'opacity-60' if account.is_archived }}">
+        <div class="flex items-start justify-between">
+          <div class="flex items-center gap-3 min-w-0">
+            <span class="grid place-items-center h-11 w-11 rounded-2xl text-xl shrink-0"
+                  style="background: {{ account.color }}22; color: {{ account.color }}">{{ account.icon }}</span>
+            <div class="min-w-0">
+              <p class="font-medium truncate">{{ account.name }}</p>
+              <p class="text-xs muted">{{ type_labels.get(account.type, account.type) }}{% if account.is_archived %} · archived{% endif %}</p>
+            </div>
+          </div>
+          <div x-data="{ o: false }" class="relative shrink-0">
+            <button class="muted hover:text-ink px-2" @click="o=!o" @click.outside="o=false"
+                    aria-label="Account actions" aria-haspopup="menu" :aria-expanded="o">⋯</button>
+            <div x-show="o" x-cloak class="absolute right-0 mt-1 w-40 card shadow-pop overflow-hidden z-10 text-sm">
+              <button class="block w-full text-left px-3 py-2 hover:bg-surface-2"
+                      @click="o=false; openEdit({{ {'id': account.id, 'name': account.name, 'type': account.type, 'opening_balance': account.opening_balance|string, 'icon': account.icon, 'color': account.color} | tojson }})">Edit</button>
+              <form method="post" action="{{ url_for('accounts.archive', account_id=account.id) }}">
+                <button class="block w-full text-left px-3 py-2 hover:bg-surface-2">{{ 'Restore' if account.is_archived else 'Archive' }}</button>
+              </form>
+              <form method="post" action="{{ url_for('accounts.delete', account_id=account.id) }}"
+                    onsubmit="return confirm('Delete this account?')">
+                <button class="block w-full text-left px-3 py-2 hover:bg-surface-2 text-danger">Delete</button>
+              </form>
+            </div>
+          </div>
+        </div>
+        <div class="mt-4 flex items-end justify-between">
+          <div>
+            <p class="text-xs muted">Balance</p>
+            <p class="font-display text-2xl money {{ 'text-danger' if balance < 0 else '' }}">{{ balance | inr }}</p>
+          </div>
+          <a href="{{ url_for('transactions.index', account=account.id) }}"
+             class="text-sm text-primary hover:underline shrink-0">Transactions →</a>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <!-- Add/edit modal (inline, Alpine-controlled) -->
+  <div class="fixed inset-0 z-50 overflow-hidden" :class="{ 'pointer-events-none': !modalOpen }"
+       @keydown.escape.window="close()">
+    <div class="overlay-fade absolute inset-0 bg-black/40" :class="{ 'is-open': modalOpen }" @click="close()"></div>
+    <div class="modal-panel absolute inset-x-0 top-16 mx-auto w-[92%] max-w-md card shadow-pop"
+         :class="{ 'is-open': modalOpen }">
+      <form method="post" action="{{ url_for('accounts.save') }}">
+        <input type="hidden" name="id" :value="form.id">
+        <div class="card-pad space-y-4">
+          <div class="flex items-center justify-between">
+            <h2 class="font-display text-lg" x-text="form.id ? 'Edit account' : 'New account'"></h2>
+            <button type="button" class="btn-ghost !px-2 !py-1" aria-label="Close" @click="close()">✕</button>
+          </div>
+          <div>
+            <label class="field-label">Name</label>
+            <input name="name" class="field-input" x-model="form.name" required>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="field-label">Type</label>
+              <select name="type" class="field-input" x-model="form.type">
+                {% for t in types %}<option value="{{ t }}">{{ type_labels[t] }}</option>{% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="field-label">Opening balance (₹)</label>
+              <input name="opening_balance" class="field-input money" inputmode="decimal" x-model="form.opening_balance">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="field-label">Icon (emoji)</label>
+              <input name="icon" class="field-input" maxlength="4" x-model="form.icon">
+            </div>
+            <div>
+              <label class="field-label">Colour</label>
+              <input name="color" type="color" class="field-input h-11 p-1" x-model="form.color">
+            </div>
+          </div>
+        </div>
+        <div class="flex justify-end gap-2 px-5 py-3 border-t border-line">
+          <button type="button" class="btn-ghost" @click="close()">Cancel</button>
+          <button type="submit" class="btn-primary">Save account</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

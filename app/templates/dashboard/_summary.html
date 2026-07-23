@@ -1,0 +1,34 @@
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+  <div class="card card-pad">
+    <p class="muted text-sm">Available to spend</p>
+    <p class="font-display text-3xl mt-1 money">{{ available | inr0 }}</p>
+    <p class="text-xs muted mt-1">Across bank, wallets &amp; cash</p>
+  </div>
+  <div class="card card-pad">
+    <p class="muted text-sm">{{ month.strftime('%B') }} · income vs spent</p>
+    <div class="flex items-baseline gap-2 mt-1">
+      <span class="font-display text-3xl money text-primary">{{ income | inr0 }}</span>
+    </div>
+    <div class="flex items-center gap-2 mt-1 text-sm">
+      <span class="muted">spent</span>
+      <span class="money font-medium">{{ spent | inr0 }}</span>
+    </div>
+  </div>
+  <div class="card card-pad">
+    <p class="muted text-sm">Net worth</p>
+    <p class="font-display text-3xl mt-1 money">{{ networth | inr0 }}</p>
+    <div id="nw-spark" class="mt-1 -mb-1 h-11" data-series="{{ spark | tojson }}"></div>
+  </div>
+</div>
+<script>
+  (function () {
+    function render() {
+      var el = document.getElementById("nw-spark");
+      if (!el || !el.dataset.series || !window.Steward) return;
+      if (el._chart) { try { el._chart.destroy(); } catch (e) {} }
+      try { window.Steward.sparkline(el, JSON.parse(el.dataset.series)); } catch (e) {}
+    }
+    if (window.Steward && window.ApexCharts) render();
+    else document.addEventListener("DOMContentLoaded", render);
+  })();
+</script>

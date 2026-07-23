@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Budget · Steward{% endblock %}
+{% block content %}
+<div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+  <div class="flex items-center gap-2">
+    <a href="{{ url_for('budgets.index', month=prev_month.strftime('%Y-%m')) }}"
+       class="btn-ghost !px-3" aria-label="Previous month">◀</a>
+    <h1 class="font-display text-2xl sm:text-3xl min-w-[10rem] text-center">{{ month_label(month) }}</h1>
+    <a href="{{ url_for('budgets.index', month=next_month.strftime('%Y-%m')) }}"
+       class="btn-ghost !px-3" aria-label="Next month">▶</a>
+  </div>
+  <div class="flex items-center gap-2">
+    {% if today().replace(day=1) != month %}
+      <a href="{{ url_for('budgets.index') }}" class="btn-ghost text-sm">Today</a>
+    {% endif %}
+    <button class="btn-soft" hx-post="{{ url_for('budgets.copy_last', month=month.strftime('%Y-%m')) }}" hx-swap="none">
+      Copy last month
+    </button>
+    <button class="btn-primary" @click="$dispatch('open-add')">
+      <span class="text-base leading-none">＋</span> Add transaction
+    </button>
+  </div>
+</div>
+
+<div id="budget-grid"
+     hx-get="{{ url_for('budgets.grid', month=month.strftime('%Y-%m')) }}"
+     hx-trigger="steward-refresh from:body" hx-swap="innerHTML">
+  {% include "budgets/_grid.html" %}
+</div>
+{% endblock %}

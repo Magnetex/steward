@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Categories · Steward{% endblock %}
+{% block content %}
+<div x-data="categoriesPage()">
+  <div class="flex items-center justify-between mb-2">
+    <div>
+      <h1 class="font-display text-3xl">Categories</h1>
+      <p class="muted text-sm mt-1">Organise your income and spending. Archived categories keep their history but hide from new use.</p>
+    </div>
+    <button class="btn-primary" @click="openNew('expense')"><span class="text-base leading-none">＋</span> Add category</button>
+  </div>
+  <p class="mb-5"><a href="{{ url_for('budgets.index') }}" class="text-sm text-primary hover:underline">← Back to budget</a></p>
+
+  {% macro cat_row(c, locked=false) %}
+    <div class="flex items-center gap-3 px-4 py-2.5 {{ 'opacity-60' if c.is_archived }}">
+      <span class="grid place-items-center h-9 w-9 rounded-xl bg-surface-2 shrink-0">{{ c.icon }}</span>
+      <div class="min-w-0 flex-1">
+        <p class="text-sm font-medium truncate">{{ c.name }}
+          {% if c.is_archived %}<span class="chip-neutral ml-1">archived</span>{% endif %}</p>
+        <p class="text-xs muted">{{ c.group or '—' }}{% if used[c.id] %} · used {{ used[c.id] }}×{% endif %}</p>
+      </div>
+      {% if locked %}
+        <span class="chip-neutral shrink-0" title="Fixed — backs a Savings tab">🔒 fixed</span>
+      {% else %}
+      <div x-data="{ o:false }" class="relative shrink-0">
+        <button class="muted hover:text-ink px-2" @click="o=!o" @click.outside="o=false"
+                aria-label="Category actions" aria-haspopup="menu" :aria-expanded="o">⋯</button>
+        <div x-show="o" x-cloak class="absolute right-0 mt-1 w-36 card shadow-pop overflow-hidden z-10 text-sm">
+          <button class="block w-full text-left px-3 py-2 hover:bg-surface-2"
+                  @click='o=false; openEdit({{ {"id": c.id, "name": c.name, "kind": c.kind, "icon": c.icon, "group": c.group, "locked": used[c.id] > 0} | tojson }})'>Edit</button>
+          <form method="post" action="{{ url_for('categories.archive', cat_id=c.id) }}">
+            <button class="block w-full text-left px-3 py-2 hover:bg-surface-2">{{ 'Restore' if c.is_archived else 'Archive' }}</button>
+          </form>
+          <form method="post" action="{{ url_for('categories.delete', cat_id=c.id) }}"
+                onsubmit="return confirm('Delete this category?')">
+            <button class="block w-full text-left px-3 py-2 hover:bg-surface-2 {{ 'text-ink-soft/50 cursor-not-allowed' if used[c.id] else 'text-danger' }}"
+                    {{ 'disabled' if used[c.id] }}
+                    title="{{ 'In use — archive instead' if used[c.id] else 'Delete' }}">Delete</button>
+          </form>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  {% endmacro %}
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <!-- Expense -->
+    <div>
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="font-display text-lg">Spending</h2>
+        <button class="text-sm text-primary hover:underline" @click="openNew('expense')">+ Add</button>
+      </div>
+      <div class="space-y-4">
+        {% for group, cats in expense_groups %}
+          <div class="card">
+            <div class="card-pad !py-2.5 border-b border-line">
+              <span class="text-xs font-semibold uppercase tracking-wide muted">{{ group }}</span>
+            </div>
+            <div class="divide-y divide-line">{% for c in cats %}{{ cat_row(c) }}{% endfor %}</div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Income + Savings -->
+    <div class="space-y-6">
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="font-display text-lg">Income</h2>
+          <button class="text-sm text-primary hover:underline" @click="openNew('income')">+ Add</button>
+        </div>
+        <div class="card divide-y divide-line">
+          {% for c in income %}{{ cat_row(c) }}{% else %}<p class="muted text-sm px-4 py-4">No income categories.</p>{% endfor %}
+        </div>
+      </div>
+
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="font-display text-lg">Savings</h2>
+          <span class="text-xs muted">Fixed · one per Savings tab</span>
+        </div>
+        <div class="card divide-y divide-line">
+          {% for c in savings %}{{ cat_row(c, locked=(c.id in locked_savings)) }}{% else %}<p class="muted text-sm px-4 py-4">No savings categories yet.</p>{% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add/edit modal -->
+  <div class="fixed inset-0 z-50 overflow-hidden" :class="{ 'pointer-events-none': !modalOpen }"
+       @keydown.escape.window="close()">
+    <div class="overlay-fade absolute inset-0 bg-black/40" :class="{ 'is-open': modalOpen }" @click="close()"></div>
+    <div class="modal-panel absolute inset-x-0 top-16 mx-auto w-[92%] max-w-md card shadow-pop" :class="{ 'is-open': modalOpen }">
+      <form method="post" action="{{ url_for('categories.save') }}">
+        <input type="hidden" name="id" :value="form.id">
+        <div class="card-pad space-y-4">
+          <div class="flex items-center justify-between">
+            <h2 class="font-display text-lg" x-text="form.id ? 'Edit category' : 'New category'"></h2>
+            <button type="button" class="btn-ghost !px-2 !py-1" aria-label="Close" @click="close()">✕</button>
+          </div>
+          <div class="grid grid-cols-3 gap-1 p-1 bg-surface-2 rounded-xl text-sm font-medium"
+               :class="{ 'opacity-50 pointer-events-none': form.locked }">
+            <template x-for="opt in ['expense','income','savings']" :key="opt">
+              <button type="button" @click="form.kind=opt" class="py-2 rounded-lg capitalize"
+                      :class="form.kind===opt ? 'bg-surface shadow-sm' : 'text-ink-soft'" x-text="opt"></button>
+            </template>
+          </div>
+          <input type="hidden" name="kind" :value="form.kind">
+          <p x-show="form.locked" x-cloak class="text-xs muted -mt-2">Type is locked because this category already has history.</p>
+
+          <div class="grid grid-cols-[5rem_1fr] gap-3">
+            <div><label class="field-label">Icon</label>
+              <input name="icon" class="field-input text-center" maxlength="4" x-model="form.icon"></div>
+            <div><label class="field-label">Name</label>
+              <input name="name" class="field-input" x-model="form.name" required></div>
+          </div>
+          <div x-show="form.kind==='expense' || form.kind==='savings'">
+            <label class="field-label">Group</label>
+            <input name="group" class="field-input" x-model="form.group" list="cat-groups"
+                   placeholder="e.g. Essentials, Lifestyle, Giving">
+            <datalist id="cat-groups">
+              {% for g in groups %}<option value="{{ g }}">{% endfor %}
+              <option value="Essentials"><option value="Lifestyle"><option value="Giving"><option value="Savings">
+            </datalist>
+          </div>
+        </div>
+        <div class="flex justify-end gap-2 px-5 py-3 border-t border-line">
+          <button type="button" class="btn-ghost" @click="close()">Cancel</button>
+          <button type="submit" class="btn-primary">Save category</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

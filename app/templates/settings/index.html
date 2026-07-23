@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Settings · Steward{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto">
+  <h1 class="font-display text-3xl mb-1">Settings</h1>
+  <p class="muted mb-4">Rules and rates that drive the money math. All editable.</p>
+
+  <div class="flex flex-wrap gap-2 mb-6">
+    <a href="{{ url_for('categories.index') }}" class="btn-ghost">🏷️ Manage categories</a>
+    <a href="{{ url_for('accounts.index') }}" class="btn-ghost">🏦 Manage accounts</a>
+  </div>
+
+  <form method="post" class="space-y-6">
+    <div class="card card-pad space-y-4">
+      <h2 class="font-display text-lg">Budget rules</h2>
+      <div>
+        <label class="field-label">Salary rule window (days)</label>
+        <input class="field-input" name="salary_rule_window" type="number" min="0" max="15"
+               value="{{ settings.salary_rule_window }}">
+        <p class="text-xs muted mt-1">Income dated within this many days of month-end counts in next month's budget.</p>
+      </div>
+    </div>
+
+    <div class="card card-pad space-y-4">
+      <h2 class="font-display text-lg">Rates</h2>
+      <div class="grid sm:grid-cols-2 gap-4">
+        <div>
+          <label class="field-label">EPF interest rate (% p.a.)</label>
+          <input class="field-input" name="epf_interest_rate" value="{{ settings.epf_interest_rate }}">
+        </div>
+        <div>
+          <label class="field-label">Gold manual rate (₹/gram)</label>
+          <input class="field-input" name="gold_manual_rate" placeholder="Leave blank to use market"
+                 value="{{ settings.gold_manual_rate }}">
+          <p class="text-xs muted mt-1">Overrides the fetched rate when set.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card card-pad space-y-4">
+      <div class="flex items-start justify-between gap-3">
+        <h2 class="font-display text-lg">Tax rules</h2>
+        <span class="chip-warn shrink-0">Verify against current law</span>
+      </div>
+      <p class="text-xs muted">Seeded with current Indian defaults. This is a report, not tax advice.</p>
+      <div class="grid sm:grid-cols-3 gap-4">
+        <div><label class="field-label">Equity LTCG months</label>
+          <input class="field-input" name="equity_ltcg_months" value="{{ settings.equity_ltcg_months }}"></div>
+        <div><label class="field-label">Equity LTCG rate %</label>
+          <input class="field-input" name="equity_ltcg_rate" value="{{ settings.equity_ltcg_rate }}"></div>
+        <div><label class="field-label">Equity LTCG exemption ₹</label>
+          <input class="field-input" name="equity_ltcg_exemption" value="{{ settings.equity_ltcg_exemption }}"></div>
+        <div><label class="field-label">Equity STCG rate %</label>
+          <input class="field-input" name="equity_stcg_rate" value="{{ settings.equity_stcg_rate }}"></div>
+        <div><label class="field-label">Debt slab rate %</label>
+          <input class="field-input" name="debt_slab_rate" value="{{ settings.debt_slab_rate }}"></div>
+        <div><label class="field-label">Gold LTCG months</label>
+          <input class="field-input" name="gold_ltcg_months" value="{{ settings.gold_ltcg_months }}"></div>
+        <div><label class="field-label">Gold LTCG rate %</label>
+          <input class="field-input" name="gold_ltcg_rate" value="{{ settings.gold_ltcg_rate }}"></div>
+        <div><label class="field-label">Gold slab rate %</label>
+          <input class="field-input" name="gold_slab_rate" value="{{ settings.gold_slab_rate }}"></div>
+        <div><label class="field-label">80C limit ₹</label>
+          <input class="field-input" name="sec80c_limit" value="{{ settings.sec80c_limit }}"></div>
+      </div>
+    </div>
+
+    <div class="flex justify-end">
+      <button class="btn-primary" type="submit">Save settings</button>
+    </div>
+  </form>
+
+  <!-- Data & prices -->
+  <div class="card card-pad mt-6">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="font-display text-lg">Data &amp; prices</h2>
+      <button class="btn-soft" hx-post="{{ url_for('api.refresh_prices') }}"
+              hx-target="#price-results" hx-swap="innerHTML">Refresh prices now</button>
+    </div>
+    <p class="text-xs muted mb-3">Fetches MF NAVs (mfapi.in), gold, USD→INR and stock prices (yfinance).
+      Jobs also run automatically: NAVs 21:30, market 08:00, snapshot 23:00 IST.</p>
+    <div id="price-results">
+      {% if prices %}
+        <div class="space-y-1 text-sm">
+          {% for p in prices %}
+            <div class="flex items-center justify-between">
+              <span class="font-mono text-xs muted">{{ p.key }}</span>
+              <span class="money">{{ p.price }} {{ p.currency }}
+                <span class="text-xs {{ 'text-primary' if p.ok else 'text-danger' }} ml-1">
+                  {{ p.fetched_at.strftime('%d %b %H:%M') if p.fetched_at else '—' }}</span></span>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="muted text-sm">No cached prices yet.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

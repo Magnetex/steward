@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Reports · Steward{% endblock %}
+{% block content %}
+<div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+  <h1 class="font-display text-3xl">Reports</h1>
+  <div class="flex items-center gap-2">
+    <a href="{{ url_for('reports.index', month=prev_month.strftime('%Y-%m')) }}" class="btn-ghost !px-3" aria-label="Previous month">◀</a>
+    <span class="font-display text-lg min-w-[9rem] text-center">{{ month_lbl }}</span>
+    <a href="{{ url_for('reports.index', month=next_month.strftime('%Y-%m')) }}" class="btn-ghost !px-3" aria-label="Next month">▶</a>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  <!-- 1. Spending by category -->
+  <section class="card card-pad">
+    <h2 class="font-display text-lg mb-1">Spending by category</h2>
+    <p class="muted text-sm mb-3">{{ month_lbl }} · total {{ by_cat_total | inr0 }}</p>
+    {% if by_cat %}
+      <div id="rep-donut" data-labels='{{ by_cat_labels | tojson }}' data-values='{{ by_cat_values | tojson }}'></div>
+      <div class="mt-3 divide-y divide-line max-h-56 overflow-y-auto">
+        {% for r in by_cat %}
+          <div class="flex items-center justify-between py-1.5 text-sm">
+            <span class="flex items-center gap-2">{{ r.icon }} {{ r.name }}</span>
+            <span class="money">{{ r.amount | inr0 }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}<p class="muted py-12 text-center">No spending this month.</p>{% endif %}
+  </section>
+
+  <!-- 2. Month over month -->
+  <section class="card card-pad">
+    <h2 class="font-display text-lg mb-1">Month over month</h2>
+    <p class="muted text-sm mb-3">{{ mom.this_label }} vs {{ mom.prev_label }}</p>
+    {% if mom_labels %}
+      <div id="rep-mom" data-labels='{{ mom_labels | tojson }}'
+           data-this='{{ mom_this | tojson }}' data-prev='{{ mom_prev | tojson }}'
+           data-this-label='{{ mom.this_label }}' data-prev-label='{{ mom.prev_label }}'></div>
+    {% else %}<p class="muted py-12 text-center">Nothing to compare yet.</p>{% endif %}
+  </section>
+
+  <!-- 3. Income vs expense trend -->
+  <section class="card card-pad lg:col-span-2">
+    <h2 class="font-display text-lg mb-3">Income vs expense · last 12 months</h2>
+    <div id="rep-trend" data-labels='{{ trend.labels | tojson }}'
+         data-income='{{ trend_income | tojson }}' data-expense='{{ trend_expense | tojson }}'></div>
+  </section>
+
+  <!-- 4. Top payees -->
+  <section class="card card-pad lg:col-span-2">
+    <h2 class="font-display text-lg mb-3">Top payees · {{ month_lbl }}</h2>
+    {% if payees %}
+      <div class="divide-y divide-line">
+        {% for p in payees %}
+          <div class="flex items-center gap-3 py-2">
+            <span class="grid place-items-center h-8 w-8 rounded-lg bg-surface-2 text-sm shrink-0">{{ loop.index }}</span>
+            <span class="flex-1 text-sm font-medium truncate">{{ p.payee }}</span>
+            <span class="text-xs muted">{{ p.count }}×</span>
+            <span class="money text-sm font-medium">{{ p.amount | inr0 }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}<p class="muted py-8 text-center">No payees this month.</p>{% endif %}
+  </section>
+</div>
+
+<script>
+  (function () {
+    function render() {
+      if (!window.Steward || !window.ApexCharts) return;
+      var d = document.getElementById("rep-donut");
+      if (d) Steward.donut(d, JSON.parse(d.dataset.labels), JSON.parse(d.dataset.values));
+      var m = document.getElementById("rep-mom");
+      if (m) Steward.barChart(m, JSON.parse(m.dataset.labels), [
+        { name: m.dataset.thisLabel, data: JSON.parse(m.dataset.this) },
+        { name: m.dataset.prevLabel, data: JSON.parse(m.dataset.prev) },
+      ], { colors: [Steward.cssColor("--c-primary"), Steward.cssColor("--c-gold")] });
+      var t = document.getElementById("rep-trend");
+      if (t) Steward.barChart(t, JSON.parse(t.dataset.labels), [
+        { name: "Income", data: JSON.parse(t.dataset.income) },
+        { name: "Expense", data: JSON.parse(t.dataset.expense) },
+      ], { colors: [Steward.cssColor("--c-primary"), Steward.cssColor("--c-danger")], height: 300 });
+    }
+    if (window.Steward && window.ApexCharts) render();
+    else document.addEventListener("DOMContentLoaded", render);
+  })();
+</script>
+{% endblock %}

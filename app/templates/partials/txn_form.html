@@ -1,0 +1,189 @@
+{# Global add / edit transaction slide-over. Included once from base.html. #}
+<script>window.__stewardCats = {{ form_cat_map | tojson }};</script>
+<div x-data="txnForm()" x-cloak data-today="{{ form_today }}" data-salary-window="{{ salary_window }}"
+     data-default-account="{{ form_default_account }}"
+     @open-add.window="openNew($event.detail)" @open-edit.window="openEdit($event.detail.id)"
+     @open-duplicate.window="openDuplicate($event.detail.id)"
+     @steward-added.window="onSaved($event)" @keydown.escape.window="open=false">
+
+  <!-- Overlay wrapper: always in DOM, pointer-events toggled by `open`.
+       Visibility/animation via :class (x-bind) so it never hits the
+       x-show + x-transition display:none edge case. -->
+  <div class="fixed inset-0 z-50 overflow-hidden" :class="{ 'pointer-events-none': !open }">
+    <!-- Backdrop -->
+    <div class="slideover-backdrop absolute inset-0 bg-black/40" :class="{ 'is-open': open }"
+         @click="open=false"></div>
+
+    <!-- Panel -->
+    <aside class="slideover-panel absolute inset-y-0 right-0 w-full max-w-md bg-surface border-l border-line shadow-pop flex flex-col"
+           :class="{ 'is-open': open }">
+
+    <header class="flex items-center justify-between px-5 h-14 border-b border-line shrink-0">
+      <h2 class="font-display text-lg" x-text="editingId ? 'Edit transaction' : 'Add transaction'"></h2>
+      <button class="btn-ghost !px-2 !py-1" @click="open=false" aria-label="Close">✕</button>
+    </header>
+
+    <form x-ref="form" class="flex-1 overflow-y-auto px-5 py-4 space-y-4"
+          hx-post="{{ url_for('transactions.save') }}" hx-target="#txn-sink" hx-swap="none"
+          @keydown.enter.prevent="submit()">
+      <input type="hidden" name="id" :value="editingId || ''">
+
+      <!-- Type toggle. Savings isn't here on purpose: money moves into savings
+           by recording the holding in Savings (which deducts the cash and
+           tracks the asset), not as a standalone cash-out that vanishes. -->
+      <div class="grid grid-cols-3 gap-1 p-1 bg-surface-2 rounded-xl text-sm font-medium">
+        <template x-for="opt in ['expense','income','transfer']" :key="opt">
+          <button type="button" @click="type=opt"
+                  class="py-2 rounded-lg capitalize transition-colors"
+                  :class="type===opt ? 'bg-surface shadow-sm text-ink' : 'text-ink-soft'"
+                  x-text="opt"></button>
+        </template>
+      </div>
+      <input type="hidden" name="type" :value="type">
+
+      <!-- Amount -->
+      <div>
+        <label class="field-label">Amount (₹)</label>
+        <input x-ref="amount" name="amount" x-model="amount" inputmode="decimal"
+               class="field-input text-2xl font-display money" placeholder="0.00" autocomplete="off">
+        <div x-show="!editingId && recentAmounts.length" x-cloak class="mt-2 flex flex-wrap gap-1.5">
+          <template x-for="a in recentAmounts" :key="a">
+            <button type="button" @click="pickAmount(a)"
+                    class="chip-neutral hover:bg-primary-soft hover:text-primary-strong transition-colors money"
+                    x-text="amtLabel(a)"></button>
+          </template>
+        </div>
+      </div>
+
+      <!-- Payee with autocomplete -->
+      <div class="relative" x-show="type !== 'transfer'">
+        <label class="field-label">Payee</label>
+        <input name="payee" x-model="payee" @input.debounce.200ms="searchPayees()"
+               @focus="searchPayees()" @blur="setTimeout(()=>showSug=false, 150)"
+               class="field-input" placeholder="Who did you pay?" autocomplete="off">
+        <div x-show="showSug && suggestions.length" x-cloak
+             class="absolute z-10 mt-1 w-full card shadow-pop overflow-hidden">
+          <template x-for="s in suggestions" :key="s.payee">
+            <button type="button" class="w-full text-left px-3 py-2 text-sm hover:bg-surface-2 flex items-center justify-between"
+                    @click="pickSuggestion(s)">
+              <span x-text="s.payee"></span>
+              <span class="text-xs muted" x-text="catName(s.category_id)"></span>
+            </button>
+          </template>
+        </div>
+        <div x-show="!editingId && !payee && recentPayees.length" x-cloak class="mt-2 flex flex-wrap gap-1.5">
+          <template x-for="s in recentPayees" :key="s.payee">
+            <button type="button" @click="pickSuggestion(s)"
+                    class="chip-neutral hover:bg-primary-soft hover:text-primary-strong transition-colors"
+                    x-text="s.payee"></button>
+          </template>
+        </div>
+      </div>
+
+      <!-- Account(s) -->
+      <div class="grid gap-3" :class="type==='transfer' ? 'grid-cols-2' : 'grid-cols-1'">
+        <div>
+          <label class="field-label" x-text="type==='transfer' ? 'From account' : 'Account'"></label>
+          <select name="account_id" x-model="account_id" class="field-input">
+            <option value="">Choose…</option>
+            {% for a in form_accounts %}<option value="{{ a.id }}">{{ a.icon }} {{ a.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div x-show="type==='transfer'">
+          <label class="field-label">To account</label>
+          <select name="transfer_account_id" x-model="transfer_account_id" class="field-input" :disabled="type!=='transfer'">
+            <option value="">Choose…</option>
+            {% for a in form_accounts %}<option value="{{ a.id }}">{{ a.icon }} {{ a.name }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <!-- Category (expense/income, non-split) -->
+      <div x-show="type!=='transfer' && !splitOn">
+        <label class="field-label">Category</label>
+        <select name="category_id" x-model="category_id" class="field-input" :disabled="type==='transfer' || splitOn">
+          <option value="">Uncategorised</option>
+          <template x-if="type==='expense'">
+            <optgroup label="Expense">
+              {% for c in form_expense_cats %}<option value="{{ c.id }}">{{ c.icon }} {{ c.name }}</option>{% endfor %}
+            </optgroup>
+          </template>
+          <template x-if="type==='income'">
+            <optgroup label="Income">
+              {% for c in form_income_cats %}<option value="{{ c.id }}">{{ c.icon }} {{ c.name }}</option>{% endfor %}
+            </optgroup>
+          </template>
+        </select>
+      </div>
+
+      <!-- Split toggle + rows (expense only) -->
+      <div x-show="type==='expense'">
+        <label class="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="checkbox" x-model="splitOn" class="rounded border-line text-primary focus:ring-primary/40">
+          Split across categories
+        </label>
+        <div x-show="splitOn" class="mt-2 space-y-2">
+          <template x-for="(s, i) in splits" :key="i">
+            <div class="flex items-center gap-2">
+              <select name="split_category" x-model="s.category_id" class="field-input flex-1">
+                <option value="">Category…</option>
+                {% for c in form_expense_cats %}<option value="{{ c.id }}">{{ c.icon }} {{ c.name }}</option>{% endfor %}
+              </select>
+              <input name="split_amount" x-model="s.amount" inputmode="decimal"
+                     class="field-input w-28 money" placeholder="0.00">
+              <button type="button" class="muted hover:text-danger" @click="removeSplit(i)">✕</button>
+            </div>
+          </template>
+          <div class="flex items-center justify-between text-sm">
+            <button type="button" class="text-primary hover:underline" @click="addSplit()">+ Add split</button>
+            <span class="muted">Sum <span class="money" :class="splitOk ? 'text-primary' : 'text-danger'" x-text="splitTotal()"></span>
+              / <span class="money" x-text="amount || '0'"></span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Date -->
+      <div>
+        <label class="field-label">Date</label>
+        <input type="date" name="date" x-model="date" class="field-input" @change="checkSalary()">
+        <p x-show="salaryNote" x-cloak class="text-xs mt-1 chip-gold inline-flex" x-text="salaryNote"></p>
+      </div>
+
+      <!-- Budget-month override -->
+      <div x-show="type==='income'">
+        <label class="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="checkbox" x-model="overrideBudget" class="rounded border-line text-primary focus:ring-primary/40">
+          Override budget month
+        </label>
+        <input type="month" name="budget_month" x-model="budgetMonth" x-show="overrideBudget"
+               class="field-input mt-2" :disabled="!overrideBudget">
+      </div>
+
+      <!-- Note + tags -->
+      <div class="grid grid-cols-1 gap-3">
+        <div>
+          <label class="field-label">Note</label>
+          <input name="note" x-model="note" class="field-input" placeholder="Optional">
+        </div>
+        <div>
+          <label class="field-label">Tags</label>
+          <input name="tags" x-model="tags" class="field-input" placeholder="comma, separated">
+        </div>
+      </div>
+    </form>
+
+    <footer class="px-5 py-3 border-t border-line shrink-0 flex items-center justify-between gap-3">
+      <label class="flex items-center gap-2 text-sm muted cursor-pointer" x-show="!editingId">
+        <input type="checkbox" x-model="addAnother" class="rounded border-line text-primary focus:ring-primary/40">
+        Add another
+      </label>
+      <div class="flex items-center gap-2 ml-auto">
+        <button type="button" class="btn-ghost" @click="open=false">Cancel</button>
+        <button type="button" class="btn-primary" @click="submit()"
+                x-text="editingId ? 'Save' : 'Add'"></button>
+      </div>
+    </footer>
+    </aside>
+  </div>
+  <div id="txn-sink" class="hidden"></div>
+</div>

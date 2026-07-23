@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}Sinking funds · Steward{% endblock %}
+{% block content %}
+<div x-data="fundsPage()" data-today="{{ today }}">
+  <div class="flex items-center justify-between mb-5">
+    <div>
+      <h1 class="font-display text-3xl">Sinking funds</h1>
+      <p class="muted text-sm mt-1">Goals backed by slices of what you already own — no separate pot of money.</p>
+    </div>
+    <button class="btn-primary" @click="openNewFund()"><span class="text-base leading-none">＋</span> New goal</button>
+  </div>
+
+  <div id="funds-cards" hx-get="{{ url_for('funds.cards') }}" hx-trigger="steward-refresh from:body" hx-swap="innerHTML">
+    {% include "funds/_cards.html" %}
+  </div>
+
+  <!-- Fund goal modal -->
+  <div class="fixed inset-0 z-50 overflow-hidden" :class="{ 'pointer-events-none': !fundModalOpen }"
+       @keydown.escape.window="fundModalOpen=false">
+    <div class="overlay-fade absolute inset-0 bg-black/40" :class="{ 'is-open': fundModalOpen }" @click="fundModalOpen=false"></div>
+    <div class="modal-panel absolute inset-x-0 top-16 mx-auto w-[92%] max-w-md card shadow-pop" :class="{ 'is-open': fundModalOpen }">
+      <form method="post" action="{{ url_for('funds.save') }}">
+        <input type="hidden" name="id" :value="fundForm.id">
+        <div class="card-pad space-y-4">
+          <div class="flex items-center justify-between">
+            <h2 class="font-display text-lg" x-text="fundForm.id ? 'Edit fund' : 'New sinking fund'"></h2>
+            <button type="button" class="btn-ghost !px-2 !py-1" aria-label="Close" @click="fundModalOpen=false">✕</button>
+          </div>
+          <div class="grid grid-cols-[1fr_5rem] gap-3">
+            <div><label class="field-label">Name</label>
+              <input name="name" class="field-input" x-model="fundForm.name" required></div>
+            <div><label class="field-label">Icon</label>
+              <input name="icon" class="field-input text-center" maxlength="4" x-model="fundForm.icon"></div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="field-label">Target amount (₹)</label>
+              <input name="target_amount" class="field-input money" inputmode="decimal" x-model="fundForm.target_amount"></div>
+            <div><label class="field-label">Target date</label>
+              <input name="target_date" type="date" class="field-input" x-model="fundForm.target_date"></div>
+          </div>
+          <div><label class="field-label">Note (optional)</label>
+            <input name="note" class="field-input" x-model="fundForm.note" placeholder="e.g. six months of expenses"></div>
+          <p class="text-xs muted">A goal holds no money of its own — you earmark parts of your FDs, funds, gold, stocks or cash toward it.</p>
+        </div>
+        <div class="flex justify-end gap-2 px-5 py-3 border-t border-line">
+          <button type="button" class="btn-ghost" @click="fundModalOpen=false">Cancel</button>
+          <button type="submit" class="btn-primary">Save fund</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Allocate (earmark) modal -->
+  <div class="fixed inset-0 z-50 overflow-hidden" :class="{ 'pointer-events-none': !allocOpen }"
+       @keydown.escape.window="allocOpen=false">
+    <div class="overlay-fade absolute inset-0 bg-black/40" :class="{ 'is-open': allocOpen }" @click="allocOpen=false"></div>
+    <div class="modal-panel absolute inset-x-0 top-16 mx-auto w-[92%] max-w-sm card shadow-pop" :class="{ 'is-open': allocOpen }">
+      <form hx-post="{{ url_for('funds.allocate') }}" hx-swap="none">
+        <input type="hidden" name="fund_id" :value="alloc.fundId">
+        <div class="card-pad space-y-4">
+          <div class="flex items-center justify-between">
+            <h2 class="font-display text-lg">Earmark toward goal</h2>
+            <button type="button" class="btn-ghost !px-2 !py-1" aria-label="Close" @click="allocOpen=false">✕</button>
+          </div>
+          <p class="text-sm muted">For <span class="font-medium text-ink" x-text="alloc.fundName"></span></p>
+          <div><label class="field-label">Earmark from</label>
+            <select name="source" class="field-input" x-model="alloc.source" required>
+              <option value="">Choose a savings source…</option>
+              {% for src in sources %}
+                <option value="{{ src.kind }}:{{ src.ref_id }}" {{ 'disabled' if src.available <= 0 }}>
+                  {{ src.icon }} {{ src.label }} — {{ src.available | inr0 }} free</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div><label class="field-label">Amount (₹)</label>
+            <input name="amount" class="field-input money" inputmode="decimal" x-model="alloc.amount" required></div>
+          <p class="text-xs muted">Earmarks a fixed amount of that holding. Capped at what's free on the source and at the goal's remaining target — nothing actually moves.</p>
+        </div>
+        <div class="flex justify-end gap-2 px-5 py-3 border-t border-line">
+          <button type="button" class="btn-ghost" @click="allocOpen=false">Cancel</button>
+          <button type="submit" class="btn-primary" @click="allocOpen=false">Earmark</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Spend / redeem modal -->
+  <div class="fixed inset-0 z-50 overflow-hidden" :class="{ 'pointer-events-none': !spendOpen }"
+       @keydown.escape.window="spendOpen=false">
+    <div class="overlay-fade absolute inset-0 bg-black/40" :class="{ 'is-open': spendOpen }" @click="spendOpen=false"></div>
+    <div class="modal-panel absolute inset-x-0 top-10 mx-auto w-[94%] max-w-lg card shadow-pop max-h-[88vh] overflow-y-auto" :class="{ 'is-open': spendOpen }">
+      <form hx-post="{{ url_for('funds.spend') }}" hx-swap="none" @submit="spendOpen=false">
+        <input type="hidden" name="fund_id" :value="spend.fundId">
+        <div class="card-pad space-y-4">
+          <div class="flex items-center justify-between">
+            <h2 class="font-display text-lg">Spend / redeem</h2>
+            <button type="button" class="btn-ghost !px-2 !py-1" aria-label="Close" @click="spendOpen=false">✕</button>
+          </div>
+          <p class="text-sm muted">For <span class="font-medium text-ink" x-text="spend.name"></span> —
+            liquidate what's earmarked into cash, then record the purchase.</p>
+
+          <!-- 1. Liquidate earmarks -->
+          <div>
+            <p class="field-label mb-1">Liquidate to cash</p>
+            <div class="space-y-1.5 rounded-xl border border-line p-3">
+              <template x-for="a in spend.allocs" :key="a.id">
+                <label class="flex items-center gap-2 text-sm">
+                  <input type="checkbox" name="alloc_ids" :value="a.id" x-model="spend.picked" class="accent-primary">
+                  <span x-text="a.icon"></span>
+                  <span class="flex-1 truncate" x-text="a.label"></span>
+                  <span class="muted text-xs" x-show="a.kind==='deposit'">closes in full</span>
+                  <span class="money font-medium" x-text="'₹' + a.amount"></span>
+                </label>
+              </template>
+              <p class="text-xs muted" x-show="spend.allocs.length===0">No earmarks to redeem.</p>
+            </div>
+          </div>
+          <div><label class="field-label">Deposit proceeds into</label>
+            <select name="proceeds_account_id" class="field-input">
+              {% for a in cash_accounts %}<option value="{{ a.id }}">{{ a.icon }} {{ a.name }}</option>{% endfor %}
+            </select></div>
+
+          <!-- 2. Record the purchase -->
+          <div class="pt-2 border-t border-line">
+            <p class="field-label mb-2">Record the purchase (optional)</p>
+            <div class="grid grid-cols-2 gap-3">
+              <div><label class="field-label">Amount (₹)</label>
+                <input name="amount" class="field-input money" inputmode="decimal" x-model="spend.amount"></div>
+              <div><label class="field-label">Date</label>
+                <input name="date" type="date" class="field-input" x-model="spend.date"></div>
+              <div><label class="field-label">Category</label>
+                <select name="category_id" class="field-input">
+                  <option value="">— none —</option>
+                  {% for c in expense_categories %}<option value="{{ c.id }}">{{ c.icon }} {{ c.name }}</option>{% endfor %}
+                </select></div>
+              <div><label class="field-label">Paid from</label>
+                <select name="expense_account_id" class="field-input">
+                  {% for a in cash_accounts %}<option value="{{ a.id }}">{{ a.icon }} {{ a.name }}</option>{% endfor %}
+                </select></div>
+            </div>
+            <div class="mt-3"><label class="field-label">Payee / note</label>
+              <input name="payee" class="field-input" x-model="spend.payee" placeholder="e.g. Croma — laptop"></div>
+          </div>
+
+          <label class="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="archive" value="1" x-model="spend.archive" class="accent-primary">
+            Mark goal done &amp; release remaining earmarks</label>
+        </div>
+        <div class="flex justify-end gap-2 px-5 py-3 border-t border-line">
+          <button type="button" class="btn-ghost" @click="spendOpen=false">Cancel</button>
+          <button type="submit" class="btn-primary">Redeem &amp; record</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

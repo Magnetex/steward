@@ -1,0 +1,165 @@
+{% from "_macros.html" import bar, earmark_line %}
+<div x-data="mfPage()" data-today="{{ today }}">
+  <!-- Summary + actions -->
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+    <div class="flex gap-6">
+      <div>
+        <p class="muted text-xs">Current value</p>
+        <p class="font-display text-2xl money">{{ total_value | inr0 }}</p>
+      </div>
+      <div>
+        <p class="muted text-xs">Invested</p>
+        <p class="font-display text-2xl money">{{ total_invested | inr0 }}</p>
+      </div>
+      <div>
+        <p class="muted text-xs">Overall P/L</p>
+        <p class="font-display text-2xl money {{ 'text-danger' if total_pl < 0 else 'text-primary' }}">
+          {{ total_pl | inr0 }}{% if total_pl_pct is not none %} <span class="text-sm">({{ total_pl_pct }}%)</span>{% endif %}</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <button class="btn-ghost" hx-post="{{ url_for('savings.mf_refresh') }}" hx-swap="none">Refresh NAVs</button>
+      {% if rows %}<button class="btn-ghost" @click="openSip()">🔁 Set up SIP</button>{% endif %}
+      <button class="btn-primary" @click="openHolding()"><span class="text-base leading-none">＋</span> Add holding</button>
+    </div>
+  </div>
+
+  {% if sips %}
+    <div class="card mb-5">
+      <div class="card-pad !py-2.5 border-b border-line flex items-center justify-between">
+        <span class="text-xs font-semibold uppercase tracking-wide muted">SIP plans</span>
+        <span class="text-xs muted">Auto-invested monthly · shown in Recurring too</span>
+      </div>
+      <div class="divide-y divide-line">
+        {% for s in sips %}
+          <div class="flex items-center gap-3 px-4 py-3 {{ 'opacity-60' if not s.plan.active }}">
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-medium truncate">{{ s.holding.scheme_name }}
+                {% if not s.plan.active %}<span class="chip-neutral ml-1">stopped</span>{% endif %}</p>
+              <p class="text-xs muted">
+                {{ s.current_amount | inr0 }}/mo{% if s.step_up_pct > 0 %} · step-up {{ s.step_up_pct }}%/yr{% endif %}
+                · {{ s.installments }} done · {{ s.invested | inr0 }} invested
+                {% if s.plan.active and s.next_run_date %} · next {{ s.next_run_date.strftime('%d %b %Y') }}{% endif %}
+                {% if s.account %} · from {{ s.account.icon }} {{ s.account.name }}{% endif %}
+              </p>
+            </div>
+            <div x-data="{ o:false }" class="relative shrink-0">
+              <button class="muted hover:text-ink px-2" @click="o=!o" @click.outside="o=false"
+                      aria-label="SIP actions" aria-haspopup="menu" :aria-expanded="o">⋯</button>
+              <div x-show="o" x-cloak class="absolute right-0 mt-1 w-40 card shadow-pop overflow-hidden z-10 text-sm">
+                {% if s.plan.active %}
+                  <button class="block w-full text-left px-3 py-2 hover:bg-surface-2"
+                          hx-post="{{ url_for('savings.mf_sip_stop', plan_id=s.plan.id) }}"
+                          hx-confirm="Stop this SIP? Past investments are kept; no more monthly buys." hx-swap="none">Stop SIP</button>
+                {% endif %}
+                <form method="post" onsubmit="return false;">
+                  <button type="button" class="block w-full text-left px-3 py-2 hover:bg-surface-2 text-danger"
+                          hx-post="{{ url_for('savings.mf_sip_delete', plan_id=s.plan.id) }}"
+                          hx-confirm="Remove this SIP plan? Past installments stay in your holding." hx-swap="none">Delete plan</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  {% if not rows %}
+    <div class="card card-pad text-center py-12">
+      <p class="text-3xl mb-2">📈</p>
+      <p class="muted mb-4">No mutual fund holdings yet.</p>
+      <button class="btn-primary" @click="openHolding()">Add your first holding</button>
+    </div>
+  {% else %}
+    <div class="space-y-4">
+      {% for row in rows %}
+        {% set h = row.h %}{% set m = row.m %}
+        <div class="card" x-data="{ open: !!(window._mfHistOpen||{})[{{ h.id }}] }">
+          <div class="card-pad">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <p class="font-medium leading-snug">{{ h.scheme_name }}</p>
+                <p class="text-xs muted mt-0.5">
+                  {{ h.fund_house }} · {{ h.plan_type }} · {{ h.asset_type }}{% if h.goal %} · {{ h.goal }}{% endif %}
+                </p>
+              </div>
+              <div x-data="{ o:false }" class="relative shrink-0">
+                <button class="muted hover:text-ink px-2" @click="o=!o" @click.outside="o=false"
+                        aria-label="Holding actions" aria-haspopup="menu" :aria-expanded="o">⋯</button>
+                <div x-show="o" x-cloak class="absolute right-0 mt-1 w-40 card shadow-pop overflow-hidden z-10 text-sm">
+                  <button class="block w-full text-left px-3 py-2 hover:bg-surface-2"
+                          @click="o=false; openTxn({{ h.id }}, '{{ h.scheme_name|e }}', '{{ h.scheme_code }}')">Add SIP / buy / sell</button>
+                  <form method="post" action="{{ url_for('savings.mf_holding_delete', holding_id=h.id) }}"
+                        onsubmit="return confirm('Remove this holding and its history?')">
+                    <button class="block w-full text-left px-3 py-2 hover:bg-surface-2 text-danger">Delete holding</button>
+                  </form>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+              <div><p class="muted text-xs">Invested</p><p class="money font-medium">{{ m.invested | inr0 }}</p></div>
+              <div><p class="muted text-xs">Value</p>
+                <p class="money font-medium">{% if m.current_value is not none %}{{ m.current_value | inr0 }}{% else %}<span class="muted">—</span>{% endif %}</p></div>
+              <div><p class="muted text-xs">P/L</p>
+                <p class="money font-medium {{ 'text-danger' if m.pl is not none and m.pl < 0 else 'text-primary' }}">
+                  {% if m.pl is not none %}{{ m.pl | inr0 }}{% if m.pl_pct is not none %} ({{ m.pl_pct }}%){% endif %}{% else %}—{% endif %}</p></div>
+              <div><p class="muted text-xs">XIRR</p>
+                <p class="money font-medium {{ 'text-danger' if m.xirr is not none and m.xirr < 0 else 'text-primary' }}">
+                  {% if m.xirr is not none %}{{ m.xirr }}%{% else %}—{% endif %}</p></div>
+            </div>
+
+            <div class="flex items-center justify-between gap-2 mt-3">
+              <span class="text-xs muted">{{ m.units }} units{% if m.nav is not none %} · NAV {{ m.nav | inr }}{% endif %}
+                {% if m.nav_row and m.nav_row.as_of %}<span class="ml-1">as of {{ m.nav_row.as_of.strftime('%d %b') }}</span>{% endif %}
+                {% if m.nav is none %}<span class="chip-warn ml-1">NAV not fetched</span>{% endif %}
+              </span>
+              <button class="btn-soft !py-1.5 !px-3 shrink-0 inline-flex items-center gap-1.5"
+                      @click="open=!open; (window._mfHistOpen = window._mfHistOpen || {})[{{ h.id }}] = open"
+                      :aria-expanded="open" aria-controls="mf-hist-{{ h.id }}">
+                <span aria-hidden="true" class="text-xs" x-text="open ? '▲' : '▼'"></span>
+                <span x-text="open ? 'Hide history' : ('View history (' + {{ h.transactions|length }} + ')')"></span>
+              </button>
+            </div>
+            {{ earmark_line(earmarks, 'mf', h.id) }}
+          </div>
+
+          <!-- SIP history -->
+          <div x-show="open" x-cloak id="mf-hist-{{ h.id }}" class="border-t border-line sm:overflow-x-auto">
+            <table class="rtable w-full text-sm">
+              <thead class="text-xs muted">
+                <tr class="border-b border-line">
+                  <th class="text-left font-medium px-4 py-2">Date</th>
+                  <th class="text-left font-medium px-4 py-2">Type</th>
+                  <th class="text-right font-medium px-4 py-2">Amount</th>
+                  <th class="text-right font-medium px-4 py-2">NAV</th>
+                  <th class="text-right font-medium px-4 py-2">Units</th>
+                  <th class="px-2"></th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-line">
+                {% for t in h.transactions|reverse %}
+                  <tr class="group">
+                    <td class="px-4 py-2" data-label="Date">{{ t.date.strftime('%d %b %Y') }}</td>
+                    <td class="px-4 py-2 capitalize" data-label="Type">{{ t.type }}{% if '80C' in (t.tags or '') %} <span class="chip-gold">80C</span>{% endif %}</td>
+                    <td class="px-4 py-2 text-right money" data-label="Amount">{{ t.amount | inr0 }}</td>
+                    <td class="px-4 py-2 text-right money" data-label="NAV">{{ t.nav | inr }}</td>
+                    <td class="px-4 py-2 text-right money" data-label="Units">{{ t.units }}</td>
+                    <td class="px-2 text-right">
+                      <button class="row-action hover:text-danger"
+                              hx-post="{{ url_for('savings.mf_txn_delete', txn_id=t.id) }}"
+                              hx-confirm="Delete this entry?" hx-swap="none" aria-label="Delete entry">🗑</button>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% include "savings/_mf_modals.html" %}
+</div>
