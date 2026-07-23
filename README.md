@@ -46,6 +46,20 @@ flask run                          # http://127.0.0.1:5000
 
 `flask reset-db` drops, recreates, and re-seeds in one step (handy during development).
 
+### Starting a real ledger
+
+`flask seed` is sample data — useful for seeing every screen populated, useless once you
+want to track your own money. To wipe it and begin for real:
+
+```bash
+flask fresh-db
+```
+
+That drops everything and recreates the schema with **only** the default categories
+(11 expense, 3 income, 5 savings) — no accounts, transactions or holdings. Add
+`--no-categories` for a completely bare database, or `--yes` to skip the confirmation
+prompt. Then add your accounts with their real opening balances and start logging.
+
 ### Rebuilding the stylesheet
 
 The compiled CSS (`app/static/css/app.css`) is checked in. If you change templates or

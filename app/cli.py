@@ -11,6 +11,7 @@ from .extensions import db
 def register_cli(app: Flask) -> None:
     app.cli.add_command(init_db)
     app.cli.add_command(reset_db)
+    app.cli.add_command(fresh_db)
     app.cli.add_command(seed)
     app.cli.add_command(refresh_prices)
     app.cli.add_command(run_recurring)
@@ -37,6 +38,29 @@ def reset_db(seed):
         from .services.seed import seed_all
         seed_all()
         click.echo("Sample data loaded.")
+
+
+@click.command("fresh-db")
+@click.option("--categories/--no-categories", default=True,
+              help="Keep the default category set (default: yes).")
+@click.confirmation_option(prompt="This deletes ALL data in the database. Continue?")
+@with_appcontext
+def fresh_db(categories):
+    """Start a real ledger: wipe everything, keep only default categories.
+
+    Unlike ``seed``, this creates no accounts, transactions or holdings — just
+    the scaffolding you need before entering your own data.
+    """
+    db.drop_all()
+    db.create_all()
+    if categories:
+        from .services.seed import seed_scaffold
+        seed_scaffold()
+        db.session.commit()
+        click.echo("Fresh database ready - default categories, no sample data.")
+    else:
+        click.echo("Fresh database ready - completely empty.")
+    click.echo("Next: add your accounts with real opening balances.")
 
 
 @click.command("seed")

@@ -33,30 +33,17 @@ def _clear():
     db.session.commit()
 
 
-def seed_all():
-    _clear()
-    today = today_ist()
-    this_m = month_start(today)
-    last_m = prev_month_start(today)
+def seed_scaffold() -> dict:
+    """Default settings + the standard category set. No accounts, no history.
 
+    Shared by ``seed_all`` and the ``fresh-db`` CLI command, which wants this
+    scaffolding on its own so a real ledger can be started from scratch.
+    Returns the category dict keyed as ``seed_all`` expects.
+    """
     # ---- Settings -------------------------------------------------------
     Setting.set("theme", "light")
     Setting.set("salary_rule_window", "7")
     Setting.set("epf_interest_rate", "8.25")
-
-    # ---- Accounts -------------------------------------------------------
-    accts = {}
-    accts["hdfc"] = Account(name="HDFC Savings", type="savings_bank", opening_balance=D("125000"),
-                            icon="🏦", color="#1E6B4E", sort_order=1)
-    accts["cash"] = Account(name="Cash", type="cash", opening_balance=D("3500"),
-                            icon="💵", color="#B98900", sort_order=2)
-    accts["phonepe"] = Account(name="PhonePe Wallet", type="wallet", opening_balance=D("1200"),
-                               icon="📱", color="#5B3FA0", sort_order=3)
-    accts["grocery"] = Account(name="Grocery Wallet", type="grocery_wallet", opening_balance=D("2000"),
-                               icon="🛒", color="#2F855A", sort_order=4)
-    for a in accts.values():
-        db.session.add(a)
-    db.session.flush()
 
     # ---- Categories -----------------------------------------------------
     def cat(name, kind, icon, group, order):
@@ -86,6 +73,30 @@ def seed_all():
     C["dep_sav"] = cat("Deposits", "savings", "🏦", "Savings", 3)
     C["epf_sav"] = cat("EPF", "savings", "🏛️", "Savings", 4)
     C["stock_sav"] = cat("Stocks", "savings", "📊", "Savings", 5)
+    db.session.flush()
+    return C
+
+
+def seed_all():
+    _clear()
+    today = today_ist()
+    this_m = month_start(today)
+    last_m = prev_month_start(today)
+
+    C = seed_scaffold()
+
+    # ---- Accounts -------------------------------------------------------
+    accts = {}
+    accts["hdfc"] = Account(name="HDFC Savings", type="savings_bank", opening_balance=D("125000"),
+                            icon="🏦", color="#1E6B4E", sort_order=1)
+    accts["cash"] = Account(name="Cash", type="cash", opening_balance=D("3500"),
+                            icon="💵", color="#B98900", sort_order=2)
+    accts["phonepe"] = Account(name="PhonePe Wallet", type="wallet", opening_balance=D("1200"),
+                               icon="📱", color="#5B3FA0", sort_order=3)
+    accts["grocery"] = Account(name="Grocery Wallet", type="grocery_wallet", opening_balance=D("2000"),
+                               icon="🛒", color="#2F855A", sort_order=4)
+    for a in accts.values():
+        db.session.add(a)
     db.session.flush()
 
     # ---- Transactions ---------------------------------------------------
