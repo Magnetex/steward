@@ -4,7 +4,7 @@ from __future__ import annotations
 from flask import Blueprint, render_template
 
 from ..models import Transaction
-from ..money import money
+from ..money import ZERO, money
 from ..timeutil import today_ist, month_start
 from ..services import accounts, budget as budget_svc, networth as nw_svc
 
