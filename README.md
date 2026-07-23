@@ -222,6 +222,31 @@ screen and start it on demand. The scheduler jobs are idempotent catch-up work, 
 simply run at next launch (the one exception is the 23:00 net-worth snapshot, which is
 silently missed on days the app never runs).
 
+### Launching it with one tap
+
+Typing `cd steward && . .venv/bin/activate && ... && python wsgi.py` every time gets old
+fast. [`tools/termux-start.sh`](tools/termux-start.sh) does all of that in one script —
+wire it up once as a **Termux:Widget** shortcut and starting the server becomes a single
+home-screen tap.
+
+1. Install **[Termux:Widget](https://f-droid.org/packages/com.termux.widget/)** — same
+   source as Termux itself (F-Droid or GitHub), not the Play Store.
+2. `chmod +x ~/steward/tools/termux-start.sh`
+3. `mkdir -p ~/.shortcuts && ln -s ~/steward/tools/termux-start.sh ~/.shortcuts/steward.sh`
+   — a symlink, so `git pull` keeps it current with no re-linking.
+4. Long-press an empty spot on the home screen → **Widgets** → **Termux:Widget** → drag
+   the single-shortcut style onto the home screen → pick `steward.sh` when prompted.
+
+Tapping it opens Termux, starts the server, and prints the URL — then switch to the
+**Steward** app icon (from Add to Home Screen / Install app) to open it. The script
+refuses to start a second copy if one's already running, so double-tapping is harmless;
+the real switch is off — closing that Termux session kills the server, since nothing
+here manages it as a background service.
+
+If your launcher's long-press menu doesn't offer "Widgets" the same way, Termux:Widget's
+[own docs](https://github.com/termux/termux-widget) cover the alternative "dynamic
+shortcuts" method, which pins a real launcher icon instead of a widget.
+
 ### Routes that were considered and dropped
 
 **Tailscale** (would give access from anywhere, over real HTTPS, with no firewall
