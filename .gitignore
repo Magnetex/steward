@@ -6,3 +6,6 @@ instance/
 tools/tailwindcss.exe
 .pytest_cache/
 .DS_Store
+
+# Local Claude Code config (deliberately not tracked)
+.claude/
