@@ -237,11 +237,22 @@ home-screen tap.
 4. Long-press an empty spot on the home screen → **Widgets** → **Termux:Widget** → drag
    the single-shortcut style onto the home screen → pick `steward.sh` when prompted.
 
-Tapping it opens Termux, starts the server, and prints the URL — then switch to the
-**Steward** app icon (from Add to Home Screen / Install app) to open it. The script
-refuses to start a second copy if one's already running, so double-tapping is harmless;
-the real switch is off — closing that Termux session kills the server, since nothing
-here manages it as a background service.
+Tapping it opens Termux and starts the server. On its own it stops there — Termux has no
+way to hand off to another app by itself, so the addon **Termux:API** is what does that
+handoff:
+
+5. Install **[Termux:API](https://f-droid.org/packages/com.termux.api/)** (same source),
+   then `pkg install termux-api`.
+
+With that installed, the script polls the port and fires Android's "open URL" intent the
+moment the server answers — which opens the **installed Steward app itself**, standalone
+window and all, not a browser tab, because the PWA is registered as that URL's handler.
+Skip step 5 and it falls back to printing the URL for you to open by hand.
+
+The script refuses to start a second copy if one's already running, so double-tapping is
+harmless — tapping it again while the server's already up just re-opens the app. The real
+switch is off: closing that Termux session kills the server, since nothing here manages
+it as a background service.
 
 If your launcher's long-press menu doesn't offer "Widgets" the same way, Termux:Widget's
 [own docs](https://github.com/termux/termux-widget) cover the alternative "dynamic
