@@ -2,16 +2,40 @@
 # One-tap launcher for Termux:Widget. See README.md "Launching it with one
 # tap" for setup. Guards against a double-tap starting a second APScheduler
 # (duplicate snapshots/recurring runs) by checking for an already-running
-# server before starting another.
+# server before starting another. If Termux:API is installed, also opens
+# the installed app automatically once the server responds -- otherwise
+# this just starts the server and you switch to the app by hand.
 set -e
 # NOT `cd "$(dirname "$0")/.."` -- when invoked through the ~/.shortcuts
 # symlink, $0 is the path used to invoke it (~/.shortcuts/steward.sh), not
 # where the symlink points, so that resolved to $HOME instead of the repo.
 cd "$HOME/steward"
 
+URL="http://127.0.0.1:5055"
+
+# Polls the port with bash's built-in /dev/tcp (no curl dependency) and
+# fires the Android "open URL" intent once something answers. Android
+# routes that intent to the installed PWA, not a browser tab, because the
+# PWA is registered as this URL's handler.
+wait_for_server_then_open() {
+    for _ in $(seq 1 40); do
+        if (exec 3<>/dev/tcp/127.0.0.1/5055) 2>/dev/null; then
+            exec 3<&- 3>&-
+            termux-open-url "$URL"
+            return
+        fi
+        sleep 0.25
+    done
+}
+
 if pgrep -f "python.*wsgi.py" > /dev/null; then
-    echo "Build Steward is already running - open the app."
-    sleep 2
+    echo "Build Steward is already running."
+    if command -v termux-open-url > /dev/null 2>&1; then
+        termux-open-url "$URL"
+    else
+        echo "Open $URL (or tap the installed app icon)."
+    fi
+    sleep 1
     exit 0
 fi
 
@@ -19,7 +43,13 @@ source .venv/bin/activate
 export FLASK_APP=wsgi.py
 
 echo "Starting Build Steward..."
-echo "Open http://localhost:5055 (or tap the installed app icon) once it's up."
+if command -v termux-open-url > /dev/null 2>&1; then
+    echo "Will open the app automatically once it's ready."
+    wait_for_server_then_open &
+else
+    echo "Open $URL (or tap the installed app icon) once it's up."
+    echo "Tip: install Termux:API to have this open automatically - see README."
+fi
 echo "Leave this Termux session open - closing it stops the server."
 echo
 
