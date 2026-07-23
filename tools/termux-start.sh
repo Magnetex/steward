@@ -4,7 +4,10 @@
 # (duplicate snapshots/recurring runs) by checking for an already-running
 # server before starting another.
 set -e
-cd "$(dirname "$0")/.."
+# NOT `cd "$(dirname "$0")/.."` -- when invoked through the ~/.shortcuts
+# symlink, $0 is the path used to invoke it (~/.shortcuts/steward.sh), not
+# where the symlink points, so that resolved to $HOME instead of the repo.
+cd "$HOME/steward"
 
 if pgrep -f "python.*wsgi.py" > /dev/null; then
     echo "Build Steward is already running - open the app."
