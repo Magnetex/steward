@@ -26,13 +26,29 @@ def init_db():
     click.echo("Tables created.")
 
 
+def _recreate_schema():
+    """Drop and rebuild every table, then tell Alembic we're at head.
+
+    ``create_all`` builds the schema straight from the models, which *is* the
+    head revision — but it leaves ``alembic_version`` at whatever it said
+    before. Without the stamp the two drift apart, and the next real migration
+    tries to add a column ``create_all`` already made ("duplicate column").
+    """
+    db.drop_all()
+    db.create_all()
+    try:
+        from flask_migrate import stamp
+        stamp(revision="head")
+    except Exception as exc:  # noqa: BLE001 - never block a reset on this
+        click.echo(f"  (couldn't stamp migration head: {exc})")
+
+
 @click.command("reset-db")
 @click.option("--seed/--no-seed", default=True, help="Load sample data after reset.")
 @with_appcontext
 def reset_db(seed):
     """Drop everything, recreate tables, and (optionally) seed sample data."""
-    db.drop_all()
-    db.create_all()
+    _recreate_schema()
     click.echo("Database reset.")
     if seed:
         from .services.seed import seed_all
@@ -51,8 +67,7 @@ def fresh_db(categories):
     Unlike ``seed``, this creates no accounts, transactions or holdings — just
     the scaffolding you need before entering your own data.
     """
-    db.drop_all()
-    db.create_all()
+    _recreate_schema()
     if categories:
         from .services.seed import seed_scaffold
         seed_scaffold()
