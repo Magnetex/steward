@@ -75,14 +75,21 @@ def test_payee_memory_prefill(seeded):
 def test_recents_chips(seeded):
     """Add-form quick-entry chips: recent payees + distinct amounts, type-scoped."""
     client = seeded.test_client()
-    from app.models import Account, Category
+    from datetime import timedelta
+    from app.models import Account, Category, Transaction
     with seeded.app_context():
         acc = Account.query.filter_by(type="savings_bank").first().id
         cat = Category.query.filter_by(kind="expense").first().id
+        # Newer than anything seeded, rather than a hardcoded date. Seed places
+        # current-month rows on fixed days (dm(this_m, 12)), so early in the
+        # month they are dated in the future -- a fixed date here silently
+        # dropped out of the newest-5 window and failed on its own.
+        newest = Transaction.query.order_by(Transaction.date.desc()).first().date
+    entered_on = (newest + timedelta(days=1)).isoformat()
 
     for amt in ("120.00", "120.00", "340.00"):  # dupes should collapse
         client.post("/transactions/save", data={
-            "type": "expense", "date": "2026-07-18", "amount": amt,
+            "type": "expense", "date": entered_on, "amount": amt,
             "account_id": acc, "category_id": cat, "payee": "Chip Cafe"})
 
     data = client.get("/transactions/recents?type=expense").get_json()
