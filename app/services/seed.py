@@ -93,7 +93,7 @@ def seed_all():
                             icon="💵", color="#B98900", sort_order=2)
     accts["phonepe"] = Account(name="PhonePe Wallet", type="wallet", opening_balance=D("1200"),
                                icon="📱", color="#5B3FA0", sort_order=3)
-    accts["grocery"] = Account(name="Grocery Wallet", type="grocery_wallet", opening_balance=D("2000"),
+    accts["grocery"] = Account(name="Grocery Wallet", type="wallet", opening_balance=D("2000"),
                                icon="🛒", color="#2F855A", sort_order=4)
     for a in accts.values():
         db.session.add(a)

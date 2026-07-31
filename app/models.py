@@ -18,8 +18,8 @@ from .timeutil import now_ist
 # ---------------------------------------------------------------------------
 # Enumerated string values (kept as plain constants — SQLite has no enums)
 # ---------------------------------------------------------------------------
-ACCOUNT_TYPES = ["savings_bank", "wallet", "grocery_wallet", "cash"]
-CASH_LIKE_TYPES = ["savings_bank", "wallet", "grocery_wallet", "cash"]  # count as "available"
+ACCOUNT_TYPES = ["savings_bank", "wallet", "cash"]
+CASH_LIKE_TYPES = ["savings_bank", "wallet", "cash"]  # count as "available"
 # Sinking-fund goals earmark slices of these existing assets (+ cash), rather
 # than holding money of their own.
 FUND_SOURCE_KINDS = ["mf", "gold", "deposit", "stock", "cash"]

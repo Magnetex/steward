@@ -11,10 +11,10 @@ from ..services import accounts as acc_svc
 bp = Blueprint("accounts", __name__, url_prefix="/accounts")
 
 TYPE_LABELS = {
-    "savings_bank": "Savings / bank", "wallet": "Wallet", "grocery_wallet": "Grocery wallet",
+    "savings_bank": "Savings / bank", "wallet": "Wallet",
     "cash": "Cash", "fund": "Fund (legacy)",
 }
-TYPE_ICONS = {"savings_bank": "🏦", "wallet": "📱", "grocery_wallet": "🛒", "cash": "💵", "fund": "🤲"}
+TYPE_ICONS = {"savings_bank": "🏦", "wallet": "📱", "cash": "💵", "fund": "🤲"}
 
 
 @bp.route("/")
