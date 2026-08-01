@@ -46,6 +46,22 @@ flask run                          # http://127.0.0.1:5000
 
 `flask reset-db` drops, recreates, and re-seeds in one step (handy during development).
 
+### Backup & restore
+
+**Settings → Backup & restore**. "Download backup" gives you a byte-exact SQLite
+snapshot (taken with SQLite's online backup API, so it is safe and consistent even
+while the app is serving). Restore uploads one back.
+
+Restore replaces *everything*, so it asks twice and snapshots the database it is about
+to overwrite to `instance/steward-replaced-<timestamp>.db` first — a mistaken restore is
+recoverable. Uploads are validated before anything is touched: wrong magic bytes, a
+failed `PRAGMA integrity_check`, or a SQLite file that isn't a Steward database is
+rejected with the live data untouched. Restart the app afterwards.
+
+On a phone this is the only thing standing between you and total loss, since the
+database lives in Termux's private storage. Download a backup somewhere off the device
+(Drive, Syncthing, USB) on a schedule you'll actually keep.
+
 ### Starting a real ledger
 
 `flask seed` is sample data — useful for seeing every screen populated, useless once you

@@ -96,5 +96,41 @@
       {% endif %}
     </div>
   </div>
+
+  <!-- Backup & restore -->
+  <div class="card card-pad mt-6" x-data="{ confirming: false }">
+    <h2 class="font-display text-lg mb-1">Backup &amp; restore</h2>
+    <p class="text-xs muted mb-4">
+      A backup is an exact copy of your database — every account, transaction and
+      holding. Keep it somewhere off this device.
+    </p>
+
+    <div class="flex flex-wrap items-center gap-3 mb-5">
+      <a class="btn-primary" href="{{ url_for('settings.backup') }}">⬇ Download backup</a>
+      <span class="text-xs muted">Safe to use while the app is running.</span>
+    </div>
+
+    <div class="border-t border-line pt-4">
+      <h3 class="font-medium text-sm mb-1">Restore from a backup</h3>
+      <p class="text-xs muted mb-3">
+        This <strong>replaces everything</strong> currently in the app with the contents
+        of the backup file. The database being replaced is saved alongside it first, so a
+        mistake is recoverable.
+      </p>
+      <form method="post" action="{{ url_for('settings.restore') }}"
+            enctype="multipart/form-data" class="space-y-3"
+            @submit="if (!confirming) { $event.preventDefault(); confirming = true }">
+        <input type="file" name="backup" accept=".db,.sqlite,.sqlite3"
+               class="field-input text-sm" required>
+        <div class="flex items-center gap-3">
+          <button type="submit" class="btn-soft"
+                  :class="confirming && '!bg-danger !text-white'"
+                  x-text="confirming ? 'Yes — replace all my data' : 'Restore'"></button>
+          <button type="button" class="btn-ghost text-sm" x-show="confirming" x-cloak
+                  @click="confirming = false">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
 {% endblock %}
