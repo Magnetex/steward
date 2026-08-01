@@ -187,14 +187,15 @@
 
   // --- Accounts page modal (inline; page-load content = reliable reactivity) --
   window.accountsPage = function () {
-    var blank = { id: "", name: "", type: "savings_bank", opening_balance: "0", icon: "🏦", color: "#1E6B4E" };
+    var blank = { id: "", name: "", type: "savings_bank", opening_balance: "0", icon: "🏦", color: "#1E6B4E", sms_identifiers: "" };
     return {
       modalOpen: false,
       form: Object.assign({}, blank),
       openNew() { this.form = Object.assign({}, blank); this.modalOpen = true; },
       openEdit(d) {
         this.form = { id: d.id, name: d.name, type: d.type,
-                      opening_balance: String(d.opening_balance), icon: d.icon, color: d.color };
+                      opening_balance: String(d.opening_balance), icon: d.icon, color: d.color,
+                      sms_identifiers: d.sms_identifiers || "" };
         this.modalOpen = true;
       },
       close() { this.modalOpen = false; },

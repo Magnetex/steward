@@ -14,7 +14,7 @@ def register_cli(app: Flask) -> None:
     app.cli.add_command(fresh_db)
     app.cli.add_command(seed)
     app.cli.add_command(backup)
-    app.cli.add_command(backup)
+    app.cli.add_command(scan_sms)
     app.cli.add_command(refresh_prices)
     app.cli.add_command(run_recurring)
     app.cli.add_command(snapshot)
@@ -90,38 +90,6 @@ def seed():
 
 
 @click.command("backup")
-@click.argument("dest", type=click.Path())
-@click.option("--keep", type=int, default=0,
-              help="Delete all but the newest N backups sitting beside DEST.")
-@with_appcontext
-def backup(dest, keep):
-    """Write a snapshot of the database to DEST.
-
-    Same online-backup snapshot the Settings page downloads, so it is safe to
-    run while the app is serving. Used by tools/termux-start.sh to keep copies
-    in Android shared storage, where they outlive Termux itself.
-    """
-    from pathlib import Path
-    from .services.backup import write_snapshot
-
-    path = Path(dest)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    write_snapshot(path)
-    click.echo(f"Backed up to {path}")
-
-    if keep > 0:
-        # Same-shaped siblings only, so this can never reach beyond its own
-        # backup set (a bare *.db glob would happily delete the live database
-        # if someone pointed DEST at instance/).
-        stem = path.name.split("-")[0]
-        siblings = sorted(path.parent.glob(f"{stem}-*.db"),
-                          key=lambda p: p.stat().st_mtime, reverse=True)
-        for old in siblings[keep:]:
-            old.unlink()
-            click.echo(f"  removed {old.name}")
-
-
-@click.command("backup")
 @click.argument("dest_dir", type=click.Path(file_okay=False))
 @click.option("--keep", default=14, show_default=True,
               help="How many dated backups to keep (0 = keep all).")
@@ -136,6 +104,22 @@ def backup(dest_dir, keep):
     path = daily_backup(dest_dir, keep=keep)
     size = path.stat().st_size / 1024
     click.echo(f"Backed up to {path} ({size:.0f} KB)")
+
+
+@click.command("scan-sms")
+@with_appcontext
+def scan_sms():
+    """Read bank SMS via Termux:API and queue anything new for review."""
+    from .services.sms_import import scan, SMSUnavailable, termux_available
+    if not termux_available():
+        click.echo("Termux:API not available - skipping SMS scan.")
+        return
+    try:
+        result = scan()
+    except SMSUnavailable as exc:
+        click.echo(f"SMS scan skipped: {exc}")
+        return
+    click.echo(result["message"])
 
 
 @click.command("refresh-prices")

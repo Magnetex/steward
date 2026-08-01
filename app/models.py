@@ -55,6 +55,15 @@ class Account(db.Model):
     sort_order = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=_now)
 
+    # Trailing digits this account is known by in bank SMS, comma-separated.
+    # One account can have several: an HDFC savings account is quoted as both
+    # "A/c XX4458" and, for card spends, "Card x8876".
+    sms_identifiers = db.Column(db.String(120), default="")
+
+    @property
+    def sms_id_list(self) -> list[str]:
+        return [p.strip() for p in (self.sms_identifiers or "").split(",") if p.strip()]
+
     @property
     def is_cash_like(self) -> bool:
         return self.type in CASH_LIKE_TYPES
@@ -152,6 +161,55 @@ class PayeeMemory(db.Model):
     last_type = db.Column(db.String(10), default="expense")
     uses = db.Column(db.Integer, default=1)
     updated_at = db.Column(db.DateTime, default=_now, onupdate=_now)
+
+
+class PendingImport(db.Model):
+    """A transaction candidate parsed from a bank SMS, awaiting review.
+
+    Nothing here reaches the ledger until it is confirmed: a misparse costs a
+    dismissal, never a wrong figure in the accounts. The raw message is kept
+    alongside the parsed fields so a bad parse can be diagnosed from the
+    original text.
+    """
+    __tablename__ = "pending_import"
+    id = db.Column(db.Integer, primary_key=True)
+
+    # --- the message, as received ---
+    source = db.Column(db.String(10), nullable=False, default="sms")
+    sender = db.Column(db.String(40), default="")
+    body = db.Column(db.String(1000), default="")
+    received_at = db.Column(db.DateTime, nullable=False, index=True)
+    # sender + body + timestamp; UNIQUE so re-scanning the inbox is a no-op.
+    dedupe_hash = db.Column(db.String(64), unique=True, nullable=False, index=True)
+
+    # --- what the parser made of it ---
+    bank = db.Column(db.String(12), default="")
+    direction = db.Column(db.String(6), default="debit")   # debit | credit
+    amount = db.Column(DecimalText, nullable=False, default=ZERO)
+    txn_date = db.Column(db.Date, nullable=False)
+    payee = db.Column(db.String(120), default="")
+    reference = db.Column(db.String(60), default="")
+    stated_balance = db.Column(DecimalText, nullable=True)
+    is_reversal = db.Column(db.Boolean, default=False, nullable=False)
+
+    # --- what it resolved to ---
+    account_id = db.Column(db.Integer, db.ForeignKey("account.id"), nullable=True)
+    transfer_account_id = db.Column(db.Integer, db.ForeignKey("account.id"), nullable=True)
+    category_id = db.Column(db.Integer, db.ForeignKey("category.id"), nullable=True)
+    suggested_type = db.Column(db.String(10), default="expense")  # TXN_TYPES
+
+    # Set when an existing transaction looks like the same spend already
+    # entered by hand, so the queue can warn instead of silently duplicating.
+    duplicate_of_id = db.Column(db.Integer, db.ForeignKey("transaction.id"), nullable=True)
+
+    status = db.Column(db.String(10), nullable=False, default="pending", index=True)
+    transaction_id = db.Column(db.Integer, db.ForeignKey("transaction.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=_now)
+
+    account = db.relationship("Account", foreign_keys=[account_id])
+    transfer_account = db.relationship("Account", foreign_keys=[transfer_account_id])
+    category = db.relationship("Category")
+    duplicate_of = db.relationship("Transaction", foreign_keys=[duplicate_of_id])
 
 
 # ---------------------------------------------------------------------------

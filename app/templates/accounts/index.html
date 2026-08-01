@@ -31,7 +31,7 @@
                     aria-label="Account actions" aria-haspopup="menu" :aria-expanded="o">⋯</button>
             <div x-show="o" x-cloak class="absolute right-0 mt-1 w-40 card shadow-pop overflow-hidden z-10 text-sm">
               <button class="block w-full text-left px-3 py-2 hover:bg-surface-2"
-                      @click='o=false; openEdit({{ {"id": account.id, "name": account.name, "type": account.type, "opening_balance": account.opening_balance|string, "icon": account.icon, "color": account.color} | tojson }})'>Edit</button>
+                      @click='o=false; openEdit({{ {"id": account.id, "name": account.name, "type": account.type, "opening_balance": account.opening_balance|string, "icon": account.icon, "color": account.color, "sms_identifiers": account.sms_identifiers or ""} | tojson }})'>Edit</button>
               <form method="post" action="{{ url_for('accounts.archive', account_id=account.id) }}">
                 <button class="block w-full text-left px-3 py-2 hover:bg-surface-2">{{ 'Restore' if account.is_archived else 'Archive' }}</button>
               </form>
@@ -92,6 +92,15 @@
               <label class="field-label">Colour</label>
               <input name="color" type="color" class="field-input h-11 p-1" x-model="form.color">
             </div>
+          </div>
+          <div>
+            <label class="field-label">Bank SMS digits</label>
+            <input name="sms_identifiers" class="field-input" x-model="form.sms_identifiers"
+                   placeholder="e.g. 4458, 8876">
+            <p class="text-xs muted mt-1">
+              The trailing digits this account shows as in bank alerts, comma-separated.
+              Add the card's digits too — imported SMS then match this account automatically.
+            </p>
           </div>
         </div>
         <div class="flex justify-end gap-2 px-5 py-3 border-t border-line">

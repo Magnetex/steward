@@ -46,6 +46,41 @@ flask run                          # http://127.0.0.1:5000
 
 `flask reset-db` drops, recreates, and re-seeds in one step (handy during development).
 
+### Importing transactions from bank SMS (Android)
+
+**SMS imports** in the nav reads bank alerts via Termux:API and queues them for review.
+Nothing is ever posted automatically — a misparse costs one dismissal, never a wrong
+figure in the accounts.
+
+Setup: install the **Termux:API** app, `pkg install termux-api`, then grant it the SMS
+permission (Android may need this done manually under Settings → Apps → Termux:API →
+Permissions). Then open **Accounts** and fill in **Bank SMS digits** for each account —
+the trailing digits it appears as in alerts, comma-separated. An HDFC savings account
+quoted as both `A/c XX4458` and `Card x8876` takes `4458, 8876`, so card spends land on
+the right account.
+
+Scans run three ways, all sharing one "last scanned" timestamp shown on the page: when
+the launcher starts, from the **Scan now** button, and daily at 22:00 IST.
+
+Guards worth knowing:
+
+- **The first scan imports nothing.** It plants a watermark at "now", so enabling the
+  feature never drags in old messages or duplicates what you already entered by hand.
+  Only SMS arriving afterwards are considered.
+- **Re-scanning is a no-op.** The whole inbox is re-read each time; the watermark plus a
+  unique hash per message mean each one is considered exactly once.
+- **Money moving between your own accounts becomes one transfer**, not an expense plus an
+  income, which would inflate both sides of the budget.
+- **Likely duplicates are flagged** — a matching amount on the same account within three
+  days shows a warning instead of silently double-counting.
+- Categories are pre-filled from payee memory, so a merchant you've categorised before
+  comes back with the same category.
+
+Banks are recognised by name in the sender ID (senders vary: `VM-HDFCBK`, `AD-HDFCBK`).
+Currently HDFC, Pluxee and RNSB, in `services/sms_parse.py` — add one by writing patterns
+and appending to `PARSERS`. Every pattern is tested against real message text in
+`tests/test_sms_parse.py`; if a bank changes its wording, that's where it will fail.
+
 ### Backup & restore
 
 **Settings → Backup & restore**. "Download backup" gives you a byte-exact SQLite

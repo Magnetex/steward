@@ -62,12 +62,13 @@ def _register_blueprints(app: Flask) -> None:
     from .blueprints.reports import bp as reports_bp
     from .blueprints.tax import bp as tax_bp
     from .blueprints.settings import bp as settings_bp
+    from .blueprints.imports import bp as imports_bp
     from .blueprints.api import bp as api_bp
 
     for bp in (
         dashboard_bp, accounts_bp, categories_bp, transactions_bp, budgets_bp,
         recurring_bp, funds_bp, savings_bp, networth_bp, reports_bp, tax_bp,
-        settings_bp, api_bp,
+        settings_bp, imports_bp, api_bp,
     ):
         app.register_blueprint(bp)
 

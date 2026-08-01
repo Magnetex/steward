@@ -56,6 +56,10 @@ else
     echo "  (no access to /sdcard - run termux-setup-storage to enable backups)"
 fi
 
+# Queue any new bank SMS before the server comes up, so the review list is
+# already populated when you open the app. Never blocks the launch.
+flask scan-sms || echo "  (SMS scan skipped)"
+
 echo "Starting Build Steward..."
 if command -v termux-open-url > /dev/null 2>&1; then
     echo "Will open the app automatically once it's ready."

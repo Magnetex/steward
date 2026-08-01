@@ -50,6 +50,11 @@ def start_scheduler(app):
     # Alert sweep (maturities, overshoots) a couple of times a day
     sched.add_job(job("sweep_alerts"), CronTrigger(hour="7,20", minute=15), id="sweep_alerts",
                   replace_existing=True)
+    # Bank-SMS sweep at the end of the day, before the 23:00 snapshot. The
+    # launcher also scans on start, so a day the server was down is covered
+    # the next time the app is opened.
+    sched.add_job(job("scan_sms"), CronTrigger(hour=22, minute=0), id="scan_sms",
+                  replace_existing=True)
 
     sched.start()
     _scheduler = sched
@@ -82,3 +87,9 @@ def _run_named_job(name: str) -> None:
     elif name == "sweep_alerts":
         from .services.alerts import sweep_all
         sweep_all()
+    elif name == "scan_sms":
+        # Only meaningful on the phone; a desktop install has no Termux:API
+        # and simply skips rather than logging a failure every night.
+        from .services.sms_import import scan, termux_available
+        if termux_available():
+            scan()

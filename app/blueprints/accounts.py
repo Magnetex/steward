@@ -44,6 +44,10 @@ def save():
     account.opening_balance = money(request.form.get("opening_balance"))
     account.icon = (request.form.get("icon") or TYPE_ICONS.get(account.type, "🏦")).strip()[:8] or "🏦"
     account.color = (request.form.get("color") or "#1E6B4E").strip()
+    # Digits this account appears as in bank SMS, so imports can match it.
+    account.sms_identifiers = ",".join(
+        p.strip() for p in (request.form.get("sms_identifiers") or "").split(",") if p.strip()
+    )[:120]
     if account_id is None:
         account.sort_order = (db.session.query(db.func.max(Account.sort_order)).scalar() or 0) + 1
         db.session.add(account)
