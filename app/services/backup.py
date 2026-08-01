@@ -19,7 +19,12 @@ from pathlib import Path
 from flask import current_app
 
 from ..extensions import db
-from ..timeutil import now_ist
+from ..timeutil import now_ist, today_ist
+
+# Dated one-per-day, so launching the app repeatedly overwrites the day's file
+# instead of producing dozens. Sorts chronologically as plain text, which is
+# what rotation relies on.
+DAILY_GLOB = "steward-*.db"
 
 SQLITE_MAGIC = b"SQLite format 3\x00"
 
@@ -78,6 +83,42 @@ def snapshot_bytes() -> bytes:
         tmp = Path(d) / "snapshot.db"
         write_snapshot(tmp)
         return tmp.read_bytes()
+
+
+def daily_backup(dest_dir: Path, keep: int = 14) -> Path:
+    """Snapshot into ``dest_dir`` as a dated file, pruning to ``keep`` newest.
+
+    Used by the Termux launcher to set a copy aside on every app start. The
+    destination is shared storage, which survives uninstalling Termux — unlike
+    the database itself, which lives in Termux's private directory.
+    """
+    dest_dir = Path(dest_dir)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    target = dest_dir / f"steward-{today_ist().isoformat()}.db"
+    write_snapshot_atomically(target)
+
+    if keep > 0:
+        existing = sorted(dest_dir.glob(DAILY_GLOB))
+        for stale in existing[:-keep]:
+            stale.unlink(missing_ok=True)
+    return target
+
+
+def write_snapshot_atomically(target: Path) -> Path:
+    """Snapshot to a sibling temp file, then move into place.
+
+    Writing straight to ``target`` would leave a half-written backup there if
+    the process died partway — and on a phone, that file may be the only copy.
+    """
+    tmp = target.with_name(target.name + ".part")
+    tmp.unlink(missing_ok=True)
+    try:
+        write_snapshot(tmp)
+        tmp.replace(target)
+    finally:
+        tmp.unlink(missing_ok=True)
+    return target
 
 
 def validate(path: Path) -> None:

@@ -62,6 +62,17 @@ On a phone this is the only thing standing between you and total loss, since the
 database lives in Termux's private storage. Download a backup somewhere off the device
 (Drive, Syncthing, USB) on a schedule you'll actually keep.
 
+There is also a CLI form, used by the Termux launcher (see below):
+
+```bash
+flask backup /sdcard/Steward/backup --keep 14
+```
+
+It writes one dated file per day (`steward-2026-08-02.db`), so running it repeatedly
+overwrites the day's file rather than piling up, and prunes to the newest `--keep`.
+Despite the name, `/sdcard` is **internal shared storage** on every Android phone —
+not a physical card — so this works without one.
+
 ### Starting a real ledger
 
 `flask seed` is sample data — useful for seeing every screen populated, useless once you
@@ -269,6 +280,15 @@ The script refuses to start a second copy if one's already running, so double-ta
 harmless — tapping it again while the server's already up just re-opens the app. The real
 switch is off: closing that Termux session kills the server, since nothing here manages
 it as a background service.
+
+**Every launch also writes a backup** to `/sdcard/Steward/backup`, keeping the newest 14.
+That folder is internal shared storage, outside Termux's private directory, so it
+survives uninstalling Termux and other apps can see it — point Drive or Syncthing at it
+and backups leave the device on their own. Run `termux-setup-storage` once to grant the
+permission; without it the launcher just says so and starts the server anyway. Note this
+only runs when you tap the launcher, so a week without opening the app is a week without
+a new backup — and `/sdcard` is the same physical device, so it does not protect against
+losing the phone until something syncs it off.
 
 If your launcher's long-press menu doesn't offer "Widgets" the same way, Termux:Widget's
 [own docs](https://github.com/termux/termux-widget) cover the alternative "dynamic

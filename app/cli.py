@@ -13,6 +13,8 @@ def register_cli(app: Flask) -> None:
     app.cli.add_command(reset_db)
     app.cli.add_command(fresh_db)
     app.cli.add_command(seed)
+    app.cli.add_command(backup)
+    app.cli.add_command(backup)
     app.cli.add_command(refresh_prices)
     app.cli.add_command(run_recurring)
     app.cli.add_command(snapshot)
@@ -85,6 +87,55 @@ def seed():
     from .services.seed import seed_all
     seed_all()
     click.echo("Sample data loaded.")
+
+
+@click.command("backup")
+@click.argument("dest", type=click.Path())
+@click.option("--keep", type=int, default=0,
+              help="Delete all but the newest N backups sitting beside DEST.")
+@with_appcontext
+def backup(dest, keep):
+    """Write a snapshot of the database to DEST.
+
+    Same online-backup snapshot the Settings page downloads, so it is safe to
+    run while the app is serving. Used by tools/termux-start.sh to keep copies
+    in Android shared storage, where they outlive Termux itself.
+    """
+    from pathlib import Path
+    from .services.backup import write_snapshot
+
+    path = Path(dest)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_snapshot(path)
+    click.echo(f"Backed up to {path}")
+
+    if keep > 0:
+        # Same-shaped siblings only, so this can never reach beyond its own
+        # backup set (a bare *.db glob would happily delete the live database
+        # if someone pointed DEST at instance/).
+        stem = path.name.split("-")[0]
+        siblings = sorted(path.parent.glob(f"{stem}-*.db"),
+                          key=lambda p: p.stat().st_mtime, reverse=True)
+        for old in siblings[keep:]:
+            old.unlink()
+            click.echo(f"  removed {old.name}")
+
+
+@click.command("backup")
+@click.argument("dest_dir", type=click.Path(file_okay=False))
+@click.option("--keep", default=14, show_default=True,
+              help="How many dated backups to keep (0 = keep all).")
+@with_appcontext
+def backup(dest_dir, keep):
+    """Write a dated database snapshot into DEST_DIR.
+
+    One file per day, so running it repeatedly overwrites today's rather than
+    piling up. Used by the Termux launcher on every app start.
+    """
+    from .services.backup import daily_backup
+    path = daily_backup(dest_dir, keep=keep)
+    size = path.stat().st_size / 1024
+    click.echo(f"Backed up to {path} ({size:.0f} KB)")
 
 
 @click.command("refresh-prices")

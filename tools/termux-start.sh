@@ -42,6 +42,20 @@ fi
 source .venv/bin/activate
 export FLASK_APP=wsgi.py
 
+# Set a copy aside on internal shared storage before starting. This lives
+# outside Termux's private directory, so it survives uninstalling Termux --
+# and other apps (Drive, Syncthing) can see it to carry it off the device.
+# Needs `termux-setup-storage` once to grant the permission.
+#
+# Never allowed to block the launch: `|| true` because `set -e` is on, and a
+# missing SD path or denied permission must not stop you opening the app.
+BACKUP_DIR="/sdcard/Steward/backup"
+if [ -w /sdcard ]; then
+    flask backup "$BACKUP_DIR" --keep 14 || echo "  (backup skipped - see above)"
+else
+    echo "  (no access to /sdcard - run termux-setup-storage to enable backups)"
+fi
+
 echo "Starting Build Steward..."
 if command -v termux-open-url > /dev/null 2>&1; then
     echo "Will open the app automatically once it's ready."
