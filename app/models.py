@@ -191,6 +191,10 @@ class PendingImport(db.Model):
     reference = db.Column(db.String(60), default="")
     stated_balance = db.Column(DecimalText, nullable=True)
     is_reversal = db.Column(db.Boolean, default=False, nullable=False)
+    # Digits the message quoted, kept so an unmatched row can say *which*
+    # account to register rather than making you open the raw SMS to find out.
+    account_hint = db.Column(db.String(20), default="")
+    counterparty_hint = db.Column(db.String(20), default="")
 
     # --- what it resolved to ---
     account_id = db.Column(db.Integer, db.ForeignKey("account.id"), nullable=True)

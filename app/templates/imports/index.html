@@ -67,8 +67,23 @@
           {% endif %}
           {% if not r.account_id %}
             <p class="mt-3 text-xs rounded-lg px-3 py-2 chip-warn">
-              Couldn't tell which account this is. Pick one below — add the card's
-              last digits on the Accounts page and future ones will match automatically.
+              {% if r.account_hint %}
+                No account registered for digits <strong>{{ r.account_hint }}</strong>.
+                Pick one below, and add <strong>{{ r.account_hint }}</strong> to its
+                “Bank SMS digits” on the Accounts page so future ones match themselves.
+              {% else %}
+                This alert didn't name an account. Pick one below.
+              {% endif %}
+              Until it's registered, duplicate warnings and transfer detection stay off
+              for this account.
+            </p>
+          {% elif r.counterparty_hint and not r.transfer_account_id %}
+            <p class="mt-3 text-xs rounded-lg px-3 py-2 chip-warn">
+              This looks like a transfer to your own account ending
+              <strong>{{ r.counterparty_hint }}</strong>, but no account is registered
+              for those digits — so it's queued as
+              {{ 'spending' if r.direction == 'debit' else 'income' }}. Register them and
+              it'll be matched as a transfer instead.
             </p>
           {% endif %}
           {% if r.suggested_type == 'transfer' %}

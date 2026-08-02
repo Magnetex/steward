@@ -213,3 +213,53 @@ def test_review_page_renders(ledger):
     html = ledger.test_client().get("/imports/").get_data(as_text=True)
     assert "BHATTA S FOODS PRIVATE" in html
     assert "555" in html
+
+
+# --- what happens when the accounts aren't registered ----------------------
+def test_unmatched_row_records_the_digits_it_saw(app):
+    """So the warning can name them instead of sending you to the raw SMS."""
+    with app.app_context():
+        Setting.set(si.WATERMARK_KEY, datetime(2026, 7, 1).isoformat())
+        db.session.commit()
+        si.scan([_msg("VM-RNSBNK", RNSB_IMPS_OUT, datetime(2026, 7, 24, 12, 0))])
+
+        row = PendingImport.query.one()
+        assert row.account_id is None
+        assert row.account_hint == "7655"
+        assert row.counterparty_hint == "458"
+
+
+def test_transfer_degrades_to_expense_when_accounts_are_unknown(app):
+    """Documented degradation: without both accounts it cannot be a transfer."""
+    with app.app_context():
+        Setting.set(si.WATERMARK_KEY, datetime(2026, 7, 1).isoformat())
+        db.session.commit()
+        si.scan([_msg("VM-RNSBNK", RNSB_IMPS_OUT, datetime(2026, 7, 24, 12, 0))])
+        assert PendingImport.query.one().suggested_type == "expense"
+
+
+def test_transfer_needs_both_sides_registered(app):
+    """Only one side known is still not enough to call it a transfer."""
+    with app.app_context():
+        db.session.add(Account(name="RNSB", type="savings_bank",
+                               opening_balance=D("0"), sms_identifiers="7655"))
+        Setting.set(si.WATERMARK_KEY, datetime(2026, 7, 1).isoformat())
+        db.session.commit()
+        si.scan([_msg("VM-RNSBNK", RNSB_IMPS_OUT, datetime(2026, 7, 24, 12, 0))])
+
+        row = PendingImport.query.one()
+        assert row.account.name == "RNSB"
+        assert row.transfer_account_id is None
+        assert row.suggested_type == "expense"
+        assert row.counterparty_hint == "458", "still tells you what to register"
+
+
+def test_unmatched_page_names_the_digits_to_register(app):
+    with app.app_context():
+        Setting.set(si.WATERMARK_KEY, datetime(2026, 7, 1).isoformat())
+        db.session.commit()
+        si.scan([_msg("VM-HDFCBK", HDFC_CARD, datetime(2026, 7, 26, 22, 1))])
+
+    html = app.test_client().get("/imports/").get_data(as_text=True)
+    assert "8876" in html, "should name the digits the SMS quoted"
+    assert "No account registered" in html

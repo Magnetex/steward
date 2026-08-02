@@ -224,6 +224,7 @@ def _build_pending(sender, body, received, parsed) -> PendingImport:
         bank=parsed.bank, direction=parsed.direction, amount=money(parsed.amount),
         txn_date=on, payee=parsed.payee, reference=parsed.reference,
         stated_balance=parsed.balance, is_reversal=parsed.is_reversal,
+        account_hint=parsed.account_hint, counterparty_hint=parsed.counterparty_hint,
         account_id=account.id if account else None,
         transfer_account_id=counterparty.id if counterparty else None,
         suggested_type=ttype, status="pending",
