@@ -64,15 +64,54 @@ def fetch_messages(limit: int = FETCH_LIMIT) -> list[dict]:
             ["termux-sms-list", "-l", str(limit), "-t", "inbox"],
             capture_output=True, text=True, timeout=60, check=True)
     except subprocess.TimeoutExpired as exc:
-        raise SMSUnavailable("Reading SMS timed out.") from exc
+        raise SMSUnavailable(
+            "Reading SMS timed out. If Android hasn't asked yet, grant the SMS "
+            "permission to Termux:API and try again.") from exc
     except subprocess.CalledProcessError as exc:
         raise SMSUnavailable(
             "Couldn't read SMS — grant the SMS permission to Termux:API in "
-            f"Android settings. ({(exc.stderr or '').strip()[:120]})") from exc
+            f"Android settings. ({(exc.stderr or '').strip()[:160]})") from exc
+    return parse_termux_output(out.stdout, out.stderr)
+
+
+def parse_termux_output(stdout: str, stderr: str = "") -> list[dict]:
+    """Turn termux-sms-list output into records, tolerantly.
+
+    Termux:API does not always hand back clean JSON: a denied permission or a
+    version mismatch between the app and the `termux-api` package prints a
+    plain-text complaint instead, and some builds emit warnings before the
+    array. So skip to the first bracket, and if it still won't parse, report
+    what actually came back — an opaque "unreadable" tells nobody anything.
+    """
+    text = (stdout or "").strip().lstrip("﻿")
+    if not text:
+        # No output at all is normal for an empty inbox, but is also what a
+        # silently-denied permission looks like; surface stderr if there is any.
+        if (stderr or "").strip():
+            raise SMSUnavailable(
+                f"Termux read no messages and reported: {stderr.strip()[:200]}")
+        return []
+
+    start = min((i for i in (text.find("["), text.find("{")) if i != -1),
+                default=-1)
+    if start > 0:
+        text = text[start:]
+
     try:
-        return json.loads(out.stdout or "[]")
+        data = json.loads(text)
     except json.JSONDecodeError as exc:
-        raise SMSUnavailable("Termux returned something unreadable.") from exc
+        snippet = (stdout or "").strip()[:200] or "(nothing on stdout)"
+        extra = f" stderr: {stderr.strip()[:120]}" if (stderr or "").strip() else ""
+        raise SMSUnavailable(
+            "Termux:API didn't return message data. It said: "
+            f"{snippet}{extra} — this usually means the SMS permission isn't "
+            "granted, or the Termux:API app and the termux-api package are "
+            "different versions. Run `flask sms-doctor` for details."
+        ) from exc
+
+    if isinstance(data, dict):        # some builds wrap a single record
+        data = [data]
+    return [r for r in data if isinstance(r, dict)]
 
 
 def _received_at(raw: dict) -> datetime | None:

@@ -15,6 +15,7 @@ def register_cli(app: Flask) -> None:
     app.cli.add_command(seed)
     app.cli.add_command(backup)
     app.cli.add_command(scan_sms)
+    app.cli.add_command(sms_doctor)
     app.cli.add_command(refresh_prices)
     app.cli.add_command(run_recurring)
     app.cli.add_command(snapshot)
@@ -120,6 +121,48 @@ def scan_sms():
         click.echo(f"SMS scan skipped: {exc}")
         return
     click.echo(result["message"])
+
+
+@click.command("sms-doctor")
+@with_appcontext
+def sms_doctor():
+    """Diagnose SMS scanning: what Termux:API is actually returning."""
+    import shutil
+    import subprocess
+
+    click.echo("Checking SMS scanning setup...\n")
+
+    for tool in ("termux-sms-list", "termux-api-start"):
+        path = shutil.which(tool)
+        click.echo(f"  {tool:20} {path or 'NOT FOUND'}")
+    if not shutil.which("termux-sms-list"):
+        click.echo("\nInstall the Termux:API *app*, then: pkg install termux-api")
+        return
+
+    click.echo("\nRunning: termux-sms-list -l 1 -t inbox")
+    try:
+        out = subprocess.run(["termux-sms-list", "-l", "1", "-t", "inbox"],
+                             capture_output=True, text=True, timeout=30)
+    except subprocess.TimeoutExpired:
+        click.echo("  TIMED OUT — Android is likely waiting on a permission prompt.")
+        return
+
+    click.echo(f"  exit code : {out.returncode}")
+    click.echo(f"  stdout    : {(out.stdout or '').strip()[:400] or '(empty)'}")
+    click.echo(f"  stderr    : {(out.stderr or '').strip()[:400] or '(empty)'}")
+
+    from .services.sms_import import parse_termux_output, SMSUnavailable
+    try:
+        rows = parse_termux_output(out.stdout, out.stderr)
+    except SMSUnavailable as exc:
+        click.echo(f"\n  -> Could not read messages: {exc}")
+        return
+    click.echo(f"\n  -> Parsed {len(rows)} message(s).")
+    if rows:
+        keys = sorted(rows[0].keys())
+        click.echo(f"     fields: {', '.join(keys)}")
+        if "received" not in keys:
+            click.echo("     WARNING: no 'received' field — scanning needs it.")
 
 
 @click.command("refresh-prices")
