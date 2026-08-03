@@ -1,15 +1,28 @@
 # Build Steward — Python dependencies
+#
+# Everything here is pure Python: `pip install` needs no compiler and no build
+# tools, which is what makes the Android/Termux install work. Please keep it
+# that way — a dependency needing a C extension will fail to build on a phone.
+
+# --- web app ---
 Flask>=3.0,<4.0
 Flask-SQLAlchemy>=3.1,<4.0
 Flask-Migrate>=4.0,<5.0
 SQLAlchemy>=2.0,<3.0
+
+# Imported directly (app/cli.py, migrations/), not just pulled in by Flask and
+# Flask-Migrate. Declared so the imports are backed by a stated requirement.
+click>=8.0
+alembic>=1.13
+Werkzeug>=3.0
+
+# --- background jobs & network ---
 APScheduler>=3.10,<4.0
 requests>=2.31
-python-dateutil>=2.9
-# NB: no yfinance. Its only use was one price lookup, now a plain requests
-# call in services/market.py -- it dragged in pandas + numpy, the only
-# compiled dependencies here, which are slow and failure-prone to build on
-# Android/Termux. Everything above is pure Python.
 
-# Dev / tests
+# NB: no yfinance. Its only use was one price lookup, now a plain requests call
+# in services/market.py -- it dragged in pandas + numpy, the only compiled
+# dependencies here, which are slow and often fail to build on Android/Termux.
+
+# --- dev / tests only ---
 pytest>=8.0
