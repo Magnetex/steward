@@ -20,6 +20,13 @@ Werkzeug>=3.0
 APScheduler>=3.10,<4.0
 requests>=2.31
 
+# The IANA timezone database, for ZoneInfo("Asia/Kolkata") in app/timeutil.py.
+# Required, not optional: Termux ships no system zoneinfo, so without this the
+# app cannot import at all. Do not assume another package provides it -- it
+# used to arrive via pandas (through yfinance), and removing that broke every
+# Termux install until this line existed. Pure Python: it is only data.
+tzdata>=2024.1
+
 # NB: no yfinance. Its only use was one price lookup, now a plain requests call
 # in services/market.py -- it dragged in pandas + numpy, the only compiled
 # dependencies here, which are slow and often fail to build on Android/Termux.
