@@ -1,44 +1,51 @@
-# Build Steward — Session handoff (2026-07-22)
+# Build Steward — Session handoff (2026-08-03)
 
-**Goal:** Single-user local budgeting + finance app (INR ₹, EveryDollar-inspired). Repo: `C:\tools\budget_tracker-2.0`
-**Stack:** Python 3.12 · Flask (app-factory + blueprints) · SQLAlchemy · SQLite `instance/steward.db` · Flask-Migrate/Alembic · APScheduler. Front: Jinja2 + htmx + Alpine.js + Tailwind (standalone `tools/tailwindcss.exe`, no Node) + ApexCharts, vendored. Exact-Decimal money (`app/money.py::DecimalText`, TEXT-stored); IST dates. Durable facts auto-load from `.claude` memory (`budget-tracker-app.md`) — updated this session.
-**Status:** ✅ Done & verified · **85 pytest tests pass** · no console errors.
+**Goal:** Single-user local budgeting/finance app (INR ₹). Repo `C:\tools\budget_tracker-2.0`, pushed to **`github.com/Magnetex/steward`** (private). This session: got it **running on the user's Android phone via Termux**, then built backup/restore and bank-SMS import.
+**Stack:** Python 3.12 (3.13 on phone) · Flask app-factory + blueprints · SQLAlchemy · SQLite `instance/steward.db` · Flask-Migrate/Alembic · APScheduler. Front: Jinja2 + htmx + Alpine + Tailwind (standalone `tools/tailwindcss.exe`) + ApexCharts, vendored. Exact-Decimal money (`app/money.py::DecimalText`, TEXT). IST dates.
+**Status:** ✅ Live on the phone and in use · **223 pytest green** · migrations at head **`bd91f1133943`** (9 files) · working tree clean, `main` == `origin/main`.
+
+> **Durable facts auto-load from `.claude` memory `budget-tracker-app.md` — READ IT.** Updated this session with the whole Termux deployment section. This file is session narrative + current state only.
 
 ## Done (this session)
-- **Recent-payee/amount chips** in the add-transaction form — `/transactions/recents?type=` endpoint (`services/transactions.py::recent_payees/recent_amounts`); tappable chips under Amount & Payee, `en-IN` grouped labels; reuse `pickSuggestion`. Live-verified.
-- **Savings type + investment cash-linking** (the big one — fixes a real accounting bug where buying an investment inflated net worth without deducting cash):
-  - New `savings` txn type (`Transaction.flow` out/in; `signed_amount`/`all_balances` handle it). Migration `a1b2c3d4e5f6` adds `transaction.flow/invest_kind/invest_ref_id` + `recurring_rule.invest_kind/invest_ref_id`.
-  - `services/invest_link.py`: `sync_cash()` / `unlink_cash()` / `sync_deposit_cash()`. MF/Gold buy+sell and FD get an optional **"Paid from"** account → creates a linked `savings` cash txn (tagged `invest_kind`+`invest_ref_id`; blank account = backfill, no cash effect). Sells credit cash (flow=in). **RD → monthly recurring savings rule** (`recurring.materialize_rule()` new).
-  - Budget **Savings section** (`budget.compute_savings`/`savings_saved_by_category`; new `savings` category kind). Auto categories 📈 Mutual Funds / 🪙 Gold / 🏦 Deposits (names MUST match `invest_link.SAVINGS_CATEGORIES`; seeded).
-  - **Net-worth neutral by construction** — live-verified: funded buy Δ=₹0; backfill (no account) +asset (expected).
-  - `tests/test_savings.py` (9 tests).
-- **Removed manual Savings from the add form** (user decision): add form has only 3 toggles (expense/income/transfer). Savings is created **only** via Investments "Paid from". Savings rows in the txn list are **read-only** `<a>` links to `/investments/?tab=` (no edit-dispatch, no delete; unlinked/legacy rows inert `#`). Budget Savings section kept but ＋ quick-add removed.
+1. **Deployed to Android via Termux** — runs at `localhost:5055` and installs as a **real PWA** (localhost is a secure origin, so the service worker registers). One-tap **Termux:Widget** launcher (`tools/termux-start.sh`): guards against double-starting a second APScheduler, auto-opens the app via `termux-open-url`, backs up first.
+2. **`flask fresh-db`** — wipe + recreate with only the 19 default categories (no sample data), for starting a real ledger. `seed_scaffold()` extracted from `seed_all()`. `reset-db`/`fresh-db` now **stamp Alembic head** (`create_all` built head-schema but left `alembic_version` stale → future "duplicate column" failures).
+3. **Backup & restore** — Settings page + `flask backup <dir> --keep 14`. Byte-exact SQLite snapshots via the **online backup API** (safe mid-write), staged through `.part` then moved. Restore validates (magic bytes, `PRAGMA integrity_check`, expected tables) **before** touching anything, and snapshots what it replaces. Daily 21:00 scheduler job + launcher + manual, all recording `last_backup_at`; **stale-backup alert** + Settings status banner.
+4. **Bank-SMS import** (`/imports`) — reads the inbox via `termux-sms-list`, parses, queues `PendingImport` rows for review. **Nothing ever auto-posts.** Parsers for **HDFC, Pluxee, RNSB** written against 11 real messages. Scans on launcher start, a Scan-now button, and daily 22:00; one shared "last scanned" timestamp.
+5. **Dropped yfinance** → plain `requests` call to Yahoo's chart API (`market._yf_last_price`). Dependency tree is now **pure Python**; `requirements.txt` audited against every import.
+6. **Bugs fixed:** dashboard vs `/networth/` disagreeing (dashboard read the last *snapshot*, page valued live) · `NameError` on an empty ledger (`ZERO` import dropped; `gold["value"] or ZERO` short-circuits on seeded data, so every test passed) · Accounts **Edit** button dead (`|tojson` inside a double-quoted `@click`) · duplicate detection comparing money **in SQL** (`DecimalText` is TEXT → `"555" != "555.00"`) · `grocery_wallet` account type folded into `wallet`.
 
 ## Next (most important first)
-- (Optional, deferred by user) Make the investment↔savings-category link **user-controlled** — recommended: assign a savings category **per holding** (like its `goal` field) so contributions roll up to it; then custom categories (e.g. PPF) become usable. Net worth stays correct (category is just a budget label). User said "just explain, don't build yet."
-- Recurring-rules page type dropdown doesn't list "savings" — an RD's auto-rule shows there but can't be re-typed from that form. Minor.
-- Older backlog: duplicate-transaction action · mobile/touch row actions (delete 🗑 hover-only) · keyboard-navigable ⋯ menus · chart text/table fallback.
-- Rename Investments → Savings: still deferred.
-- ➡️ **Next action:** await user direction. Nothing in progress. `flask reset-db` when convenient to clear this session's leftover test savings rows from the dev DB.
+- **Get `/sdcard/Steward/backup` syncing to Drive/Syncthing.** On-device backups survive uninstalling Termux but not losing the phone. The user lost their entire ledger once already.
+- **Watch the first real SMS scans** — parsers are proven against 11 samples only. `tests/test_sms_parse.py` is where a wording change will fail.
+- Older backlog: keyboard-nav for ⋯ dropdown menus · chart text/table fallback.
+- Known-but-deferred: seed places current-month rows on fixed days (`dm(this_m, 12)`), so **early in a month the demo data is future-dated** — inflates "spent" and broke a test once. Only affects `flask seed`.
+- ➡️ **Next action:** nothing in progress — awaiting direction. User's last message was "All done".
 
 ## Key decisions & gotchas
-- **Savings category = budget label only**, NOT a net-worth factor. Net worth = cash + MF/Gold/Deposit/EPF/Stock buckets, independent of any txn's category. The *structural* investment↔cash link is `invest_kind`+`invest_ref_id` on the savings txn, not the category.
-- Savings categories are **auto-labeled by kind** (all MF→"Mutual Funds"); user-created ones (PPF) are referenced by nothing → dead-end unless used as a manual budget goal. PPF is safe to delete (0 usage).
-- EPF & US-stock stay **tracking-only** (no cash link — EPF isn't your cash; stock deferred).
-- Editing a funded **deposit** with a blank "Paid from" is a no-op (won't silently unlink) — unlink by deleting the deposit.
-- **MF holdings render alphabetically** → holding id ≠ render order. Don't infer a holding's id/NAV from the first row (cost time this session).
-- Reports/tax/dashboard already type-scope to income/expense, so savings doesn't leak into those totals.
-- app.js is a blocking `<head>` script (defines `stewardShell`/`txnForm` before Alpine) — don't defer. Overlays use `:class="{'is-open':open}"` + custom CSS, NOT x-transition. htmx mutations → 204 + `HX-Trigger {steward-refresh, steward-toast}`. **Recompile app.css after any template/CSS edit.** Alembic can't import app code (`env.py render_item` maps DecimalText→sa.String).
+- **Termux: all three apps from the SAME source, never Google Play.** Needs **Termux** + **Termux:API** (SMS, `termux-open-url`) + **Termux:Widget** (launcher). Android only shares data between identically-signed apps. The **Play build is a different fork** with no Termux:API — it says *"Termux:API is not yet available on Google play"*. Use GitHub releases for all three.
+- **Termux:Widget silently ignores symlinks** whose canonical path is outside `~/.shortcuts`/`~/.termux` — it reports the folder *empty*. The shortcut must be a **real file** wrapping the repo script. Needs `chmod 700 -R ~/.shortcuts`. A bad shebang reports `exec(...): No such file or directory` naming the *script*; write it with `$(command -v bash)`.
+- **`tzdata` must stay in requirements.txt** — `timeutil.py` builds `ZoneInfo("Asia/Kolkata")` at import. It used to arrive via yfinance→pandas. On Windows it also comes via tzlocal, so **a clean-venv check on Windows does not catch this**.
+- **Keep dependencies pure Python** — a C extension fails to build on Termux.
+- **Compare money in Python, never SQL** — `DecimalText` is TEXT.
+- **Flask `|tojson` emits unescaped double quotes** → use **single-quoted** `@click='openX({{ …|tojson }})'`.
+- **First SMS scan imports nothing by design** — plants the watermark so old messages and manually-entered duplicates are never pulled in.
+- Self-transfers need **both** accounts' digits registered, else they degrade to a plain expense (double-count risk). Duplicate detection is also off for unregistered accounts.
+- Migration autogenerate keeps proposing **spurious FKs on `deposit`/`mf_txn`** — delete them from generated migrations (they exist in the models, just unrecorded in SQLite; adding them forces a batch rebuild).
+- **Browser screenshots are broken here** — verify with `get_page_text`/`read_page`/`javascript_tool`.
+- Dev DB has verification drift (₹1,10,000 "Croma laptop" expense id 44, closed FD, archived goal). The phone DB is the real one.
 
 ## Run & verify
-```
+```bash
 export FLASK_APP=wsgi.py
-flask db upgrade && flask seed        # or: flask reset-db  (drop+create+seed)
+pip install -r requirements.txt      # pure Python, no compiler needed
+flask db upgrade                     # head bd91f1133943
+flask fresh-db                       # real ledger (or `flask seed` for demo data)
 ./tools/tailwindcss.exe -c tailwind.config.js -i app/static/css/input.css -o app/static/css/app.css --minify
-.venv/Scripts/python -m pytest -q     # 85 passing
+.venv/Scripts/python -m pytest -q    # ~2 min; expect 223 pass
 ```
-- Serve: `flask run` (:5055). **Browser screenshots are BROKEN here** — verify via pytest / `get_page_text` / `read_page` / `javascript_tool`.
-- Live-verify a preview: `preview_start {name:"steward"}` (launch.json, :5055), then drive the page. A parallel session may also touch `instance/steward.db` — reset with care.
+- Serve: `preview_start {name:"steward"}` (launch.json, `autoPort: true`) or `python wsgi.py` (reads `$PORT`, default 5055).
+- Phone: tap the widget, or `~/steward/tools/termux-start.sh`.
+- SMS diagnosis: **`flask sms-doctor`** prints raw `termux-sms-list` output + parsed field names.
 
 ## Immediate context (last message)
-User asked "Is this savings category actually used anywhere?" (pointing at PPF in category management). Queried dev DB: Mutual Funds used 6× (4 txns / 2 of them invest-linked + 2 budget lines), Gold 1×, Deposits 3×, **PPF 0 (unused)**. Explained: the 3 built-ins are used only because investment code hard-codes them as the label on the savings cash-out; PPF is referenced by nothing and can't be filled (manual savings entry is gone). Offered to make the link user-controlled (per-holding category, recommended). **User chose "Just explain, don't build yet."** I explained the full linkage (structural link = `invest_kind`/`invest_ref_id`; category = budget label; net worth unaffected), made **no code changes**, and noted PPF is safe to delete. Awaiting next direction.
+Everything is set up and working on the phone. The user confirmed **"All done"** after: rebuilding Termux from GitHub APKs (Termux + Termux:API + Termux:Widget), running `termux-setup-storage`, adding their accounts with **Bank SMS digits** (HDFC `4458, 8876` · RNSB `7655` · Pluxee `7803`), and verifying backups land in `/sdcard/Steward/backup`. Their original ledger was **lost** to the Play-Store-Termux reinstall, so they started fresh with `flask fresh-db`. I closed with a recap and one open nudge: **point Drive/Syncthing at the backup folder**. Nothing is in progress; awaiting the user's next request.
