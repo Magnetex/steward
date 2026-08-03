@@ -55,6 +55,11 @@ def start_scheduler(app):
     # the next time the app is opened.
     sched.add_job(job("scan_sms"), CronTrigger(hour=22, minute=0), id="scan_sms",
                   replace_existing=True)
+    # Backup to shared storage daily, independently of the launcher. Relying on
+    # the launcher alone meant anyone starting the server directly got no
+    # backups at all, silently.
+    sched.add_job(job("auto_backup"), CronTrigger(hour=21, minute=0), id="auto_backup",
+                  replace_existing=True)
 
     sched.start()
     _scheduler = sched
@@ -87,6 +92,9 @@ def _run_named_job(name: str) -> None:
     elif name == "sweep_alerts":
         from .services.alerts import sweep_all
         sweep_all()
+    elif name == "auto_backup":
+        from .services.backup import auto_backup
+        auto_backup()
     elif name == "scan_sms":
         # Only meaningful on the phone; a desktop install has no Termux:API
         # and simply skips rather than logging a failure every night.

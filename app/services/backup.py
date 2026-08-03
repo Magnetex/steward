@@ -28,6 +28,12 @@ DAILY_GLOB = "steward-*.db"
 
 SQLITE_MAGIC = b"SQLite format 3\x00"
 
+# Android shared storage. Outside Termux's private directory, so it survives
+# uninstalling Termux -- which is exactly when you need it.
+SHARED_BACKUP_DIR = "/sdcard/Steward/backup"
+LAST_BACKUP_KEY = "last_backup_at"
+LAST_BACKUP_PATH_KEY = "last_backup_path"
+
 # Tables a file must have to be plausibly a Steward database. Deliberately a
 # small core set: a backup taken at an older revision is still worth being
 # able to restore, so this must not demand the newest tables. alembic_version
@@ -102,7 +108,69 @@ def daily_backup(dest_dir: Path, keep: int = 14) -> Path:
         existing = sorted(dest_dir.glob(DAILY_GLOB))
         for stale in existing[:-keep]:
             stale.unlink(missing_ok=True)
+
+    _record_backup(target)
     return target
+
+
+def _record_backup(path: Path) -> None:
+    """Remember when a backup last succeeded, so the UI can say so.
+
+    A backup nobody can see the status of is indistinguishable from no backup
+    at all — which is how a silently-skipped one cost a real ledger.
+    """
+    from ..models import Setting
+    Setting.set(LAST_BACKUP_KEY, now_ist().replace(tzinfo=None).isoformat())
+    Setting.set(LAST_BACKUP_PATH_KEY, str(path))
+    db.session.commit()
+
+
+def shared_storage_dir() -> Path | None:
+    """The shared-storage backup directory, if this device has one."""
+    parent = Path(SHARED_BACKUP_DIR).parent.parent   # /sdcard
+    return Path(SHARED_BACKUP_DIR) if parent.is_dir() else None
+
+
+def auto_backup() -> Path | None:
+    """Best-effort backup to shared storage. Returns None if unavailable.
+
+    Never raises: this runs from the scheduler and must not take the app down,
+    but it also must not fail *silently* — status is surfaced in Settings.
+    """
+    dest = shared_storage_dir()
+    if dest is None:
+        return None
+    try:
+        return daily_backup(dest)
+    except Exception:  # noqa: BLE001
+        import logging
+        logging.getLogger("steward.backup").exception("auto backup failed")
+        return None
+
+
+def last_backup_info() -> dict:
+    """When the last backup happened, and whether automatic ones can run."""
+    from datetime import datetime
+    from ..models import Setting
+
+    raw = Setting.get(LAST_BACKUP_KEY)
+    when = None
+    if raw:
+        try:
+            when = datetime.fromisoformat(raw)
+        except ValueError:
+            when = None
+
+    dest = shared_storage_dir()
+    age_days = (now_ist().replace(tzinfo=None) - when).days if when else None
+    return {
+        "when": when,
+        "path": Setting.get(LAST_BACKUP_PATH_KEY) or "",
+        "age_days": age_days,
+        "auto_possible": dest is not None,
+        "auto_dir": str(dest) if dest else SHARED_BACKUP_DIR,
+        "stale": when is None or (age_days is not None and age_days >= 3),
+    }
 
 
 def write_snapshot_atomically(target: Path) -> Path:

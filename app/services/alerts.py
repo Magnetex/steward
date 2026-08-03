@@ -56,4 +56,31 @@ def sweep_all() -> None:
         _ = compute_budget(month_start(today_ist()))
     except Exception:
         pass
+    try:
+        sweep_backup_alert()
+    except Exception:
+        pass
     db.session.commit()
+
+
+def sweep_backup_alert() -> None:
+    """Warn in the app when backups aren't happening.
+
+    Settings is a page you rarely open, and the failure this guards against is
+    silent by nature: a skipped backup looks exactly like a working one until
+    the day the data is gone. So it surfaces in the alert panel instead.
+    """
+    from .backup import last_backup_info
+
+    info = last_backup_info()
+    if not info["stale"]:
+        return
+    if info["when"] is None:
+        msg = ("No database backup has ever been taken — your data exists in "
+               "only one place. Open Settings → Backup & restore.")
+    else:
+        msg = (f"Last backup was {info['age_days']} days ago. "
+               "Open Settings → Backup & restore.")
+    if not info["auto_possible"]:
+        msg += " Automatic backups are off (no shared storage)."
+    add_alert("reminder", msg, dedupe_key="backup-stale")

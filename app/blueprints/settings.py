@@ -29,7 +29,8 @@ def index():
     from ..models import PriceCache
     prices = PriceCache.query.order_by(PriceCache.key).all()
     return render_template("settings/index.html", settings=all_settings(),
-                           defaults=DEFAULTS, prices=prices)
+                           defaults=DEFAULTS, prices=prices,
+                           backup_info=backup_svc.last_backup_info())
 
 
 @bp.route("/", methods=["POST"])

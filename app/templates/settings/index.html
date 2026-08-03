@@ -105,6 +105,30 @@
       holding. Keep it somewhere off this device.
     </p>
 
+    <!-- Status first: a backup you can't see the state of is no backup at all -->
+    {% if backup_info.stale %}
+      <p class="text-sm rounded-lg px-3 py-2 mb-4 chip-warn">
+        {% if not backup_info.when %}
+          ⚠ <strong>No backup has ever been taken.</strong>
+        {% else %}
+          ⚠ <strong>Last backup was {{ backup_info.age_days }} days ago.</strong>
+        {% endif %}
+        {% if backup_info.auto_possible %}
+          Automatic backups go to <code>{{ backup_info.auto_dir }}</code> daily at 21:00
+          and when the launcher starts.
+        {% else %}
+          Automatic backups are <strong>off</strong> — no shared storage found. On Android
+          run <code>termux-setup-storage</code>, then restart. Until then, download one below
+          and keep it somewhere else.
+        {% endif %}
+      </p>
+    {% else %}
+      <p class="text-sm rounded-lg px-3 py-2 mb-4 chip-gold">
+        ✓ Last backup {{ backup_info.when.strftime('%d %b, %H:%M') }}
+        {% if backup_info.path %}→ <code class="text-xs">{{ backup_info.path }}</code>{% endif %}
+      </p>
+    {% endif %}
+
     <div class="flex flex-wrap items-center gap-3 mb-5">
       <a class="btn-primary" href="{{ url_for('settings.backup') }}">⬇ Download backup</a>
       <span class="text-xs muted">Safe to use while the app is running.</span>
