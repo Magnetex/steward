@@ -291,13 +291,26 @@ fast. [`tools/termux-start.sh`](tools/termux-start.sh) does all of that in one s
 wire it up once as a **Termux:Widget** shortcut and starting the server becomes a single
 home-screen tap.
 
-1. Install **[Termux:Widget](https://f-droid.org/packages/com.termux.widget/)** — same
-   source as Termux itself (F-Droid or GitHub), not the Play Store.
-2. `chmod +x ~/steward/tools/termux-start.sh`
-3. `mkdir -p ~/.shortcuts && ln -s ~/steward/tools/termux-start.sh ~/.shortcuts/steward.sh`
-   — a symlink, so `git pull` keeps it current with no re-linking.
-4. Long-press an empty spot on the home screen → **Widgets** → **Termux:Widget** → drag
+1. Install **[Termux:Widget](https://github.com/termux/termux-widget/releases)** — a third
+   app, separate from Termux and Termux:API, and it must come from the **same source** as
+   them (all GitHub, or all F-Droid). Mixed sources install fine but cannot talk to each
+   other: Android only shares data between apps signed with the same key.
+2. Create the shortcut as a **real file**, not a symlink:
+
+   ```bash
+   mkdir -p ~/.shortcuts
+   printf '#!/data/data/com.termux/files/usr/bin/bash\nexec "$HOME/steward/tools/termux-start.sh"\n' > ~/.shortcuts/steward.sh
+   chmod 700 -R ~/.shortcuts
+   ```
+
+   Two constraints, both of which make the widget report an *empty* `~/.shortcuts` rather
+   than complain: it [ignores symlinks](https://github.com/termux/termux-widget/issues/57)
+   whose canonical path lies outside `~/.shortcuts` or `~/.termux`, and it requires the
+   directory and its contents to be user-only (`700`). The wrapper above sidesteps the
+   first while keeping the real logic in the repo, so `git pull` still updates it.
+3. Long-press an empty spot on the home screen → **Widgets** → **Termux:Widget** → drag
    the single-shortcut style onto the home screen → pick `steward.sh` when prompted.
+   If the list looks empty after fixing the above, force-stop Termux:Widget — it caches it.
 
 Tapping it opens Termux and starts the server. On its own it stops there — Termux has no
 way to hand off to another app by itself, so the addon **Termux:API** is what does that
