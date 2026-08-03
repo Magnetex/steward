@@ -1,4 +1,9 @@
-"""USD→INR and US stock prices via yfinance. Defensive; never raises to the UI.
+"""USD→INR and US stock prices from Yahoo's chart API. Never raises to the UI.
+
+Plain HTTP rather than the ``yfinance`` package: that pulls in pandas and
+numpy, the only compiled dependencies in the tree, for what amounts to one
+JSON lookup. Dropping it keeps the install pure-Python, which matters on
+Android/Termux where building numpy from source is slow and often fails.
 
 The UI reads cached values; these functions run only from refresh jobs/buttons.
 """
@@ -6,6 +11,8 @@ from __future__ import annotations
 
 import logging
 from decimal import Decimal
+
+import requests
 
 from ..extensions import db
 from ..models import StockHolding
@@ -17,19 +24,40 @@ log = logging.getLogger("steward.market")
 USDINR_KEY = "fx:usdinr"
 USDINR_FALLBACK = Decimal("86.00")
 
+CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+TIMEOUT = 10
+# Yahoo rejects requests without a browser-ish User-Agent.
+HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; BuildSteward/1.0)"}
+
 
 def _yf_last_price(symbol: str) -> Decimal | None:
-    try:
-        import yfinance as yf
-        t = yf.Ticker(symbol)
-        hist = t.history(period="5d")
-        if hist is not None and not hist.empty:
-            return to_decimal(float(hist["Close"].dropna().iloc[-1]), None)
-        fi = getattr(t, "fast_info", None)
-        if fi and fi.get("last_price"):
-            return to_decimal(float(fi["last_price"]), None)
-    except Exception as exc:  # noqa: BLE001
-        log.warning("yfinance %s failed: %s", symbol, exc)
+    """Latest price for a Yahoo symbol, or None if it can't be fetched.
+
+    Prefers the quote in ``meta``; falls back to the most recent non-null
+    close, which is what shows up outside market hours.
+    """
+    for attempt in range(2):
+        try:
+            r = requests.get(CHART_URL.format(symbol=symbol),
+                             params={"range": "5d", "interval": "1d"},
+                             headers=HEADERS, timeout=TIMEOUT)
+            r.raise_for_status()
+            results = ((r.json().get("chart") or {}).get("result")) or []
+            if not results:
+                return None
+            block = results[0]
+
+            price = (block.get("meta") or {}).get("regularMarketPrice")
+            if price:
+                return to_decimal(float(price), None)
+
+            quote = ((block.get("indicators") or {}).get("quote") or [{}])[0]
+            closes = [c for c in (quote.get("close") or []) if c is not None]
+            if closes:
+                return to_decimal(float(closes[-1]), None)
+            return None
+        except Exception as exc:  # noqa: BLE001
+            log.warning("yahoo %s failed (try %d): %s", symbol, attempt + 1, exc)
     return None
 
 

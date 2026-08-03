@@ -142,8 +142,8 @@ retries once, and on failure keeps the cached value.
 | Source        | Where from                                                        |
 |---------------|-------------------------------------------------------------------|
 | MF NAVs       | `api.mfapi.in/mf/{scheme_code}` (per-scheme daily NAV + history)   |
-| Gold (₹/gram) | yfinance `GC=F` (USD/oz) × `USDINR=X` ÷ 31.1035; manual override in Settings takes precedence |
-| US stock      | yfinance by ticker (converted to INR via USDINR)                  |
+| Gold (₹/gram) | Yahoo `GC=F` (USD/oz) × `USDINR=X` ÷ 31.1035; manual override in Settings takes precedence |
+| US stock      | Yahoo chart API by ticker (converted to INR via USDINR)          |
 
 **APScheduler** runs inside the app and refreshes automatically (IST):
 
@@ -268,10 +268,10 @@ Four things to know:
   design — financial data does not belong in a repo, private or not. To carry your real
   ledger across, copy `instance/steward.db` (~200 KB) over by USB, Syncthing or Drive
   and drop it in `instance/` *instead of* running `flask seed`.
-- **`pip install` will be slow and may fail on `yfinance`**, which pulls in pandas and
-  numpy — the only compiled dependencies in the tree. Everything else is pure Python.
-  yfinance is used by exactly one 13-line function (`market._yf_last_price`); replacing
-  it with a plain `requests` call makes this step trivial.
+- **Every dependency is pure Python**, so `pip install` needs no compiler and no
+  build tools. (`yfinance` used to be the exception — it pulled in pandas and numpy for
+  a single price lookup, which is slow and often fails to build on Android. It was
+  replaced with a plain `requests` call to the same Yahoo endpoint.)
 - **No Tailwind needed.** `app/static/css/app.css` is committed; the standalone binary is
   gitignored and is a Windows executable anyway. Only recompile if you edit templates.
 - **Back the database up.** It lives in Termux's private storage, so uninstalling Termux
@@ -338,7 +338,7 @@ your control. Viable later only under a separate personal Tailscale account.
 
 **Packaging as an Android APK** (Chaquopy embeds CPython, Flask runs on `127.0.0.1`
 inside the app, a WebView renders it) — technically sound, and cheaper than it looks
-because `yfinance` is the only native dependency. Dropped as too large for now: it needs
+and the dependency tree is now pure Python. Dropped as too large for now: it needs
 a full Android toolchain, and turns every update into a rebuild-and-sideload. Termux
 above gets most of the same benefit for a fraction of the work.
 

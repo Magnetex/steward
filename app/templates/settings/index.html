@@ -77,7 +77,7 @@
       <button class="btn-soft" hx-post="{{ url_for('api.refresh_prices') }}"
               hx-target="#price-results" hx-swap="innerHTML">Refresh prices now</button>
     </div>
-    <p class="text-xs muted mb-3">Fetches MF NAVs (mfapi.in), gold, USD→INR and stock prices (yfinance).
+    <p class="text-xs muted mb-3">Fetches MF NAVs (mfapi.in), gold, USD→INR and stock prices (Yahoo).
       Jobs also run automatically: NAVs 21:30, market 08:00, snapshot 23:00 IST.</p>
     <div id="price-results">
       {% if prices %}

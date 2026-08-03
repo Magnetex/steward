@@ -6,7 +6,10 @@ SQLAlchemy>=2.0,<3.0
 APScheduler>=3.10,<4.0
 requests>=2.31
 python-dateutil>=2.9
-yfinance>=0.2.40
+# NB: no yfinance. Its only use was one price lookup, now a plain requests
+# call in services/market.py -- it dragged in pandas + numpy, the only
+# compiled dependencies here, which are slow and failure-prone to build on
+# Android/Termux. Everything above is pure Python.
 
 # Dev / tests
 pytest>=8.0

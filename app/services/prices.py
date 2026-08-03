@@ -3,7 +3,7 @@
 Every fetch: 10s timeout, one retry, and on failure keep the last cached price
 with its original fetched_at. Failures never raise to the caller.
 
-Full network integrations (mfapi.in, yfinance) are wired in the investments
+Full network integrations (mfapi.in, Yahoo) are wired in the investments
 phases; the cache read/write plumbing below is used from day one.
 """
 from __future__ import annotations

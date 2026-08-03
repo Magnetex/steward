@@ -1,7 +1,7 @@
 """Gold: grams held, valuation, and the INR/gram rate.
 
 Rate = manual override (Setting 'gold_manual_rate') when set, else the market
-rate cached from yfinance GC=F (USD/troy oz) × USDINR ÷ 31.1035 g/oz.
+rate cached from Yahoo GC=F (USD/troy oz) × USDINR ÷ 31.1035 g/oz.
 """
 from __future__ import annotations
 
