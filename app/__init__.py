@@ -7,7 +7,7 @@ from pathlib import Path
 from flask import Flask
 
 from .extensions import db, migrate
-from .money import fmt_inr, money
+from .money import fmt_inr, money, quantize4
 from .timeutil import today_ist, month_label
 
 
@@ -85,6 +85,17 @@ def _register_template_helpers(app: Flask) -> None:
         return float(money(part) / whole * Decimal(100))
 
     app.jinja_env.filters["pct"] = pct
+
+    def qty(value):
+        """Units/grams: 4dp, trailing zeros trimmed (400.0000 -> 400).
+
+        Division results carry Decimal's full precision, which renders as a
+        28-digit number and wraps the row; quantities only mean 4dp anyway.
+        """
+        s = format(quantize4(value), "f")
+        return s.rstrip("0").rstrip(".") if "." in s else s
+
+    app.jinja_env.filters["qty"] = qty
     app.jinja_env.globals["today"] = today_ist
     app.jinja_env.globals["month_label"] = month_label
 

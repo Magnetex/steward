@@ -264,3 +264,53 @@ button.htmx-request::after {
     text-align: left; white-space: nowrap;
   }
 }
+
+/* Compact history tables: a long ledger (MF/gold/EPF entries, realized gains)
+   would be a full screen per row under .rtable, so collapse each row to two
+   dense lines instead — .h-lead and the headline .h-main on top, .h-sub and
+   every unmarked cell below, each prefixed by its data-label. The markers are
+   positional, not semantic: the lead is a date in one table and a fund name in
+   another. Drop data-label from the marked cells, whose meaning their position
+   already carries. A .h-del button is lifted out of the flow into the right
+   gutter so it keeps a thumb-sized tap area without setting the row height. */
+@media (max-width: 640px) {
+  table.htable, table.htable tbody { display: block; }
+  table.htable thead { display: none; }
+  table.htable tbody tr {
+    position: relative;
+    display: flex; flex-wrap: wrap; align-items: baseline;
+    column-gap: 0.55rem; row-gap: 0; line-height: 1.35;
+    padding: 0.45rem 2.5rem 0.45rem 1rem;
+  }
+  /* Rows without a delete button don't need the gutter. If :has() is missing
+     the rule drops and every row keeps the safe, wider padding. */
+  table.htable tbody tr:not(:has(td.h-del)) { padding-right: 1rem; }
+  table.htable tbody tr::after { content: ""; order: 3; width: 100%; }
+  table.htable td {
+    order: 5; display: inline-block; padding: 0; border: 0;
+    text-align: left; white-space: nowrap; font-size: 0.72rem;
+  }
+  /* Only the supporting cells are dimmed — the lead and the headline keep the
+     inherited ink, so a text-danger/text-primary utility on them still shows. */
+  table.htable td:not(.h-lead):not(.h-main):not(.h-del) {
+    color: rgb(var(--c-ink-soft));
+  }
+  table.htable td[data-label]:not([data-label=""])::before {
+    content: attr(data-label) " "; font-weight: 500;
+  }
+  /* max-width keeps a long lead (a fund name) from wrapping the headline onto
+     its own line — flex wraps before it shrinks, so it has to be capped. */
+  table.htable td.h-lead {
+    order: 1; font-size: 0.78rem;
+    min-width: 0; max-width: 60%; overflow: hidden; text-overflow: ellipsis;
+  }
+  table.htable td.h-main {
+    order: 2; flex: none; margin-left: auto;
+    font-size: 0.88rem; font-weight: 500;
+  }
+  table.htable td.h-sub { order: 4; }
+  table.htable td.h-del {
+    position: absolute; right: 0.25rem; top: 50%; transform: translateY(-50%);
+  }
+  table.htable td.h-del .row-action { padding: 0.6rem; }
+}

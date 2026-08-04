@@ -17,7 +17,7 @@
           <div class="flex items-start justify-between">
             <div>
               <p class="font-medium">{{ h.ticker }}{% if h.name %} <span class="muted text-sm">{{ h.name }}</span>{% endif %}</p>
-              <p class="text-xs muted mt-0.5">{{ m.qty }} shares · avg ${{ m.avg_cost_usd }}
+              <p class="text-xs muted mt-0.5">{{ m.qty | qty }} shares · avg ${{ m.avg_cost_usd }}
                 {% if not m.price_ok %}<span class="chip-warn ml-1">price not fetched</span>{% endif %}</p>
             </div>
             <span class="font-display text-xl money">{% if m.value_inr is not none %}{{ m.value_inr | inr0 }}{% else %}—{% endif %}</span>
@@ -31,7 +31,7 @@
           </div>
           <div class="mt-3 pt-3 border-t border-line flex flex-wrap gap-2">
             {% for t in h.transactions %}
-              <span class="chip-neutral group">{{ t.qty }} @ ${{ t.price_usd }}
+              <span class="chip-neutral group">{{ t.qty | qty }} @ ${{ t.price_usd }}
                 <button class="ml-1 hover:text-danger" hx-post="{{ url_for('savings.stock_txn_delete', txn_id=t.id) }}"
                         hx-confirm="Delete lot?" hx-swap="none">✕</button></span>
             {% endfor %}

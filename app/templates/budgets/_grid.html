@@ -56,7 +56,7 @@
   </div>
   <div class="divide-y divide-line">
     {% for row in budget.savings.rows %}
-      <div class="px-5 py-3.5 group/row">
+      <div class="px-5 py-3.5 group">
         <div class="flex items-center gap-2 mb-1.5">
           <a href="{{ url_for('transactions.index', category=row.category.id, month=month.strftime('%Y-%m'), type='savings') }}"
              class="flex items-center gap-2 min-w-0 flex-1 hover:text-primary transition-colors"
@@ -70,7 +70,7 @@
           <span class="text-ink-soft text-sm">/</span>
           {{ planned_cell(month, row.category.id, row.planned) }}
           {% if row.has_line %}
-            <button type="button" class="muted hover:text-danger opacity-0 group-hover/row:opacity-100 transition-opacity shrink-0"
+            <button type="button" class="row-action hover:text-danger shrink-0"
                     aria-label="Remove {{ row.category.name }} from budget"
                     title="Remove from budget"
                     hx-post="{{ url_for('budgets.remove_line', month=month.strftime('%Y-%m')) }}"
@@ -109,7 +109,7 @@
         </div>
         <div class="divide-y divide-line">
           {% for row in group.rows %}
-            <div class="px-5 py-3.5 group/row">
+            <div class="px-5 py-3.5 group">
               <div class="flex items-center gap-2 mb-1.5">
                 <a href="{{ url_for('transactions.index', category=row.category.id, month=month.strftime('%Y-%m'), type='expense') }}"
                    class="flex items-center gap-2 min-w-0 flex-1 hover:text-primary transition-colors"
@@ -126,7 +126,7 @@
                 <span class="text-sm money {{ 'text-danger' if row.remaining < 0 else 'text-ink-soft' }}">{{ row.spent | inr0 }}</span>
                 <span class="text-ink-soft text-sm">/</span>
                 {{ planned_cell(month, row.category.id, row.planned) }}
-                <button type="button" class="muted hover:text-danger opacity-0 group-hover/row:opacity-100 transition-opacity shrink-0"
+                <button type="button" class="row-action hover:text-danger shrink-0"
                         aria-label="Remove {{ row.category.name }} from budget"
                         title="Remove from budget"
                         hx-post="{{ url_for('budgets.remove_line', month=month.strftime('%Y-%m')) }}"

@@ -23,7 +23,7 @@
       </div>
     {% endif %}
     <div class="card sm:overflow-x-auto">
-      <table class="rtable w-full text-sm">
+      <table class="htable w-full text-sm">
         <thead class="text-xs muted"><tr class="border-b border-line">
           <th class="text-left font-medium px-4 py-2">Month</th>
           <th class="text-left font-medium px-4 py-2">Type</th>
@@ -35,12 +35,12 @@
         <tbody class="divide-y divide-line">
           {% for r in acc.series | reverse %}
             <tr class="group">
-              <td class="px-4 py-2" data-label="Month">{{ r.entry.month.strftime('%b %Y') }}</td>
-              <td class="px-4 py-2 capitalize" data-label="Type">{{ r.entry.entry_type }}</td>
+              <td class="h-lead px-4 py-2">{{ r.entry.month.strftime('%b %Y') }}</td>
+              <td class="h-sub px-4 py-2 capitalize">{{ r.entry.entry_type }}</td>
               <td class="px-4 py-2 text-right money" data-label="Employee">{% if r.entry.entry_type=='contribution' %}{{ r.entry.employee_share | inr0 }}{% else %}—{% endif %}</td>
               <td class="px-4 py-2 text-right money" data-label="Employer">{% if r.entry.entry_type=='contribution' %}{{ r.entry.employer_share | inr0 }}{% else %}{{ r.entry.interest_amount | inr0 }}{% endif %}</td>
-              <td class="px-4 py-2 text-right money font-medium" data-label="Balance">{{ r.balance | inr0 }}</td>
-              <td class="px-2 text-right">
+              <td class="h-main px-4 py-2 text-right money font-medium">{{ r.balance | inr0 }}</td>
+              <td class="h-del px-2 text-right">
                 <button class="row-action hover:text-danger"
                         hx-post="{{ url_for('savings.epf_entry_delete', entry_id=r.entry.id) }}"
                         hx-confirm="Delete this entry?" hx-swap="none" aria-label="Delete entry">🗑</button>

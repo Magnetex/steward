@@ -52,7 +52,7 @@
         </div>
         <div class="flex items-center justify-between">
           <span class="muted">🪙 Gold</span>
-          <span class="money">{{ glance.gold_grams }}g · {{ glance.gold_value | inr0 }}</span>
+          <span class="money">{{ glance.gold_grams | qty }}g · {{ glance.gold_value | inr0 }}</span>
         </div>
         <div class="flex items-center justify-between">
           <span class="muted">🏦 Next maturity</span>

@@ -111,7 +111,7 @@
             </div>
 
             <div class="flex items-center justify-between gap-2 mt-3">
-              <span class="text-xs muted">{{ m.units }} units{% if m.nav is not none %} · NAV {{ m.nav | inr }}{% endif %}
+              <span class="text-xs muted">{{ m.units | qty }} units{% if m.nav is not none %} · NAV {{ m.nav | inr }}{% endif %}
                 {% if m.nav_row and m.nav_row.as_of %}<span class="ml-1">as of {{ m.nav_row.as_of.strftime('%d %b') }}</span>{% endif %}
                 {% if m.nav is none %}<span class="chip-warn ml-1">NAV not fetched</span>{% endif %}
               </span>
@@ -127,7 +127,7 @@
 
           <!-- SIP history -->
           <div x-show="open" x-cloak id="mf-hist-{{ h.id }}" class="border-t border-line sm:overflow-x-auto">
-            <table class="rtable w-full text-sm">
+            <table class="htable w-full text-sm">
               <thead class="text-xs muted">
                 <tr class="border-b border-line">
                   <th class="text-left font-medium px-4 py-2">Date</th>
@@ -141,12 +141,12 @@
               <tbody class="divide-y divide-line">
                 {% for t in h.transactions|reverse %}
                   <tr class="group">
-                    <td class="px-4 py-2" data-label="Date">{{ t.date.strftime('%d %b %Y') }}</td>
-                    <td class="px-4 py-2 capitalize" data-label="Type">{{ t.type }}{% if '80C' in (t.tags or '') %} <span class="chip-gold">80C</span>{% endif %}</td>
-                    <td class="px-4 py-2 text-right money" data-label="Amount">{{ t.amount | inr0 }}</td>
+                    <td class="h-lead px-4 py-2">{{ t.date.strftime('%d %b %Y') }}</td>
+                    <td class="h-sub px-4 py-2 capitalize">{{ t.type }}{% if '80C' in (t.tags or '') %} <span class="chip-gold">80C</span>{% endif %}</td>
+                    <td class="h-main px-4 py-2 text-right money">{{ t.amount | inr0 }}</td>
                     <td class="px-4 py-2 text-right money" data-label="NAV">{{ t.nav | inr }}</td>
-                    <td class="px-4 py-2 text-right money" data-label="Units">{{ t.units }}</td>
-                    <td class="px-2 text-right">
+                    <td class="px-4 py-2 text-right money" data-label="Units">{{ t.units | qty }}</td>
+                    <td class="h-del px-2 text-right">
                       <button class="row-action hover:text-danger"
                               hx-post="{{ url_for('savings.mf_txn_delete', txn_id=t.id) }}"
                               hx-confirm="Delete this entry?" hx-swap="none" aria-label="Delete entry">🗑</button>

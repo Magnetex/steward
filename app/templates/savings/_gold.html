@@ -1,7 +1,7 @@
 <div x-data="{ open:false, type:'buy', date:'{{ today }}', amt:'', ppg:'{{ gold.rate if gold.rate is not none else "" }}' }">
   <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
     <div class="flex gap-6 flex-wrap">
-      <div><p class="muted text-xs">Grams held</p><p class="font-display text-2xl money">{{ gold.grams }}</p></div>
+      <div><p class="muted text-xs">Grams held</p><p class="font-display text-2xl money">{{ gold.grams | qty }}</p></div>
       <div><p class="muted text-xs">Avg buy /g</p><p class="font-display text-2xl money">{{ gold.avg_price | inr0 }}</p></div>
       <div><p class="muted text-xs">Current value</p>
         <p class="font-display text-2xl money">{% if gold.value is not none %}{{ gold.value | inr0 }}{% else %}—{% endif %}</p></div>
@@ -31,7 +31,7 @@
 
   {% if gold_txns %}
     <div class="card sm:overflow-x-auto">
-      <table class="rtable w-full text-sm">
+      <table class="htable w-full text-sm">
         <thead class="text-xs muted"><tr class="border-b border-line">
           <th class="text-left font-medium px-4 py-2">Date</th>
           <th class="text-left font-medium px-4 py-2">Type</th>
@@ -43,12 +43,12 @@
         <tbody class="divide-y divide-line">
           {% for t in gold_txns %}
             <tr class="group">
-              <td class="px-4 py-2" data-label="Date">{{ t.date.strftime('%d %b %Y') }}</td>
-              <td class="px-4 py-2 capitalize" data-label="Type">{{ t.type }}</td>
-              <td class="px-4 py-2 text-right money" data-label="Grams">{{ t.grams }}</td>
+              <td class="h-lead px-4 py-2">{{ t.date.strftime('%d %b %Y') }}</td>
+              <td class="h-sub px-4 py-2 capitalize">{{ t.type }}</td>
+              <td class="px-4 py-2 text-right money" data-label="Grams">{{ t.grams | qty }}</td>
               <td class="px-4 py-2 text-right money" data-label="Price/g">{{ t.price_per_gram | inr0 }}</td>
-              <td class="px-4 py-2 text-right money" data-label="Amount">{{ t.amount | inr0 }}</td>
-              <td class="px-2 text-right">
+              <td class="h-main px-4 py-2 text-right money">{{ t.amount | inr0 }}</td>
+              <td class="h-del px-2 text-right">
                 <button class="row-action hover:text-danger"
                         hx-post="{{ url_for('savings.gold_txn_delete', txn_id=t.id) }}"
                         hx-confirm="Delete this entry?" hx-swap="none" aria-label="Delete entry">🗑</button>
