@@ -8,6 +8,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
 
 from ..extensions import db
 from ..models import Account, Category, PendingImport
+from ..money import money
 from ..services import sms_import as sms
 from ..timeutil import today_ist
 
@@ -55,6 +56,18 @@ def confirm(row_id):
         raw = (request.form.get(name) or "").strip()
         return int(raw) if raw.isdigit() else None
 
+    def _splits():
+        """Parallel split_category[] / split_amount[] rows, as the add form posts."""
+        out = []
+        for raw_cat, raw_amt in zip(request.form.getlist("split_category"),
+                                    request.form.getlist("split_amount")):
+            amount = money(raw_amt)
+            if amount > 0:
+                cat = (raw_cat or "").strip()
+                out.append({"category_id": int(cat) if cat.isdigit() else None,
+                            "amount": amount})
+        return out
+
     try:
         sms.confirm(
             row,
@@ -63,6 +76,7 @@ def confirm(row_id):
             transfer_account_id=_int("transfer_account_id"),
             txn_type=(request.form.get("type") or "").strip() or None,
             payee=request.form.get("payee"),
+            splits=_splits(),
         )
         flash("Transaction added.", "success")
     except ValueError as exc:

@@ -9,7 +9,8 @@ from decimal import Decimal
 import pytest
 
 from app.extensions import db
-from app.models import Account, Category, PendingImport, Setting, Transaction
+from app.models import (Account, Category, PayeeMemory, PendingImport, Setting,
+                        Transaction)
 from app.services import sms_import as si
 from tests.test_sms_parse import (HDFC_CARD, HDFC_UPI_SENT, HDFC_SALARY,
                                   RNSB_IMPS_OUT, PLUXEE_FEE)
@@ -263,3 +264,125 @@ def test_unmatched_page_names_the_digits_to_register(app):
     html = app.test_client().get("/imports/").get_data(as_text=True)
     assert "8876" in html, "should name the digits the SMS quoted"
     assert "No account registered" in html
+
+
+# --- category memory -------------------------------------------------------
+def test_repeated_payee_preselects_the_category(ledger):
+    """The second SMS from a merchant arrives already categorised."""
+    with ledger.app_context():
+        si.scan([_msg("VM-HDFCBK", HDFC_UPI_SENT, datetime(2026, 8, 1, 9, 0))])
+        food = Category.query.filter_by(name="Food").one()
+        si.confirm(PendingImport.query.one(), category_id=food.id)
+
+        # A second, identical-merchant message a day later.
+        si.scan([_msg("VM-HDFCBK", HDFC_UPI_SENT.replace("01/08/26", "02/08/26"),
+                      datetime(2026, 8, 2, 9, 0))])
+        row = PendingImport.query.filter_by(status="pending").one()
+        assert row.category_id == food.id
+
+
+def test_payee_match_survives_a_changing_order_reference(ledger):
+    """Merchant strings carry refs that differ every time; still one payee."""
+    with ledger.app_context():
+        food = Category.query.filter_by(name="Food").one()
+        db.session.add(PayeeMemory(payee="SWIGGY*ORD123", last_category_id=food.id,
+                                   last_type="expense", uses=3))
+        db.session.commit()
+
+        assert si.suggest_category("SWIGGY*ORD98765") == food.id
+        assert si.suggest_category("Swiggy") == food.id
+        assert si.suggest_category("BigBasket") is None
+
+
+def test_a_short_payee_is_not_matched(ledger):
+    """Too few characters to pair on without inventing a link."""
+    with ledger.app_context():
+        food = Category.query.filter_by(name="Food").one()
+        db.session.add(PayeeMemory(payee="AB", last_category_id=food.id,
+                                   last_type="expense", uses=9))
+        db.session.commit()
+        assert si.suggest_category("AB") is None
+
+
+def test_queued_rows_pick_up_a_category_learned_later(ledger):
+    """Categorising one row helps the rows already waiting, not just later scans."""
+    with ledger.app_context():
+        si.scan([_msg("VM-HDFCBK", HDFC_UPI_SENT, datetime(2026, 8, 1, 9, 0)),
+                 _msg("VM-HDFCBK", HDFC_UPI_SENT.replace("01/08/26", "02/08/26"),
+                      datetime(2026, 8, 2, 9, 0))])
+        rows = si.pending_rows()
+        assert len(rows) == 2
+        assert all(r.suggested_category_id is None for r in rows)
+
+        food = Category.query.filter_by(name="Food").one()
+        si.confirm(rows[0], category_id=food.id)
+
+        still_waiting = si.pending_rows()
+        assert [r.suggested_category_id for r in still_waiting] == [food.id]
+        assert db.session.get(PendingImport, still_waiting[0].id).category_id is None, \
+            "a suggestion is not written to the row"
+
+
+# --- splitting an imported spend ------------------------------------------
+def test_confirm_splits_across_categories(ledger):
+    with ledger.app_context():
+        si.scan([_msg("VM-HDFCBK", HDFC_UPI_SENT, datetime(2026, 8, 1, 9, 0))])
+        row = PendingImport.query.one()
+        food = Category.query.filter_by(name="Food").one()
+        misc = Category(name="Misc", kind="expense", icon="📦")
+        db.session.add(misc)
+        db.session.commit()
+
+        txn = si.confirm(row, splits=[{"category_id": food.id, "amount": D("500")},
+                                      {"category_id": misc.id, "amount": D("238")}])
+
+        assert txn.amount == D("738.00")
+        assert txn.category_id is None, "the parent holds no category once split"
+        assert sorted(c.amount for c in txn.splits) == [D("238.00"), D("500.00")]
+        assert {c.category_id for c in txn.splits} == {food.id, misc.id}
+        assert all(c.type == "expense" and c.account_id == txn.account_id
+                   for c in txn.splits)
+
+
+def test_splits_must_add_up_to_the_amount_the_bank_stated(ledger):
+    with ledger.app_context():
+        si.scan([_msg("VM-HDFCBK", HDFC_UPI_SENT, datetime(2026, 8, 1, 9, 0))])
+        row = PendingImport.query.one()
+        food = Category.query.filter_by(name="Food").one()
+
+        with pytest.raises(ValueError):
+            si.confirm(row, splits=[{"category_id": food.id, "amount": D("100")}])
+        assert row.status == "pending"
+
+
+def test_splits_are_ignored_on_a_non_expense(ledger):
+    with ledger.app_context():
+        si.scan([_msg("VM-HDFCBK", HDFC_SALARY, datetime(2026, 7, 29, 10, 0))])
+        row = PendingImport.query.one()
+        food = Category.query.filter_by(name="Food").one()
+
+        txn = si.confirm(row, splits=[{"category_id": food.id, "amount": D("1")}])
+        assert txn.type == "income"
+        assert txn.splits == []
+
+
+def test_split_posted_through_the_review_form(ledger):
+    with ledger.app_context():
+        si.scan([_msg("VM-HDFCBK", HDFC_UPI_SENT, datetime(2026, 8, 1, 9, 0))])
+        row_id = PendingImport.query.one().id
+        food = Category.query.filter_by(name="Food").one()
+        misc = Category(name="Misc", kind="expense", icon="📦")
+        db.session.add(misc)
+        db.session.commit()
+        food_id, misc_id = food.id, misc.id
+
+    ledger.test_client().post(f"/imports/{row_id}/confirm", data={
+        "type": "expense",
+        "split_category": [str(food_id), str(misc_id), ""],
+        "split_amount": ["600", "138", ""],
+    })
+
+    with ledger.app_context():
+        parent = Transaction.query.filter(Transaction.parent_id.is_(None)).one()
+        assert parent.category_id is None
+        assert sorted(c.amount for c in parent.splits) == [D("138.00"), D("600.00")]

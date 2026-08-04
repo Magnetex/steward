@@ -46,8 +46,7 @@
           <div>
             {% if s.remaining > 0 %}
               <p class="muted text-xs">Still to earmark</p>
-              <p class="money font-medium">{{ s.remaining | inr0 }}
-                {% if s.months_left and s.months_left > 0 %}<span class="muted text-xs">· {{ s.required_monthly | inr0 }}/mo</span>{% endif %}</p>
+              <p class="money font-medium">{{ s.remaining | inr0 }}</p>
             {% else %}
               <p class="text-primary font-medium">Fully funded</p>
             {% endif %}
@@ -57,6 +56,25 @@
               ＋ Allocate</button>
           {% endif %}
         </div>
+
+        {# The pace needed to actually land on the target date. #}
+        {% if s.remaining > 0 and s.fund.target_date %}
+          <div class="mt-3 rounded-xl px-3 py-2 text-xs {{ 'bg-danger-soft text-danger' if s.overdue else 'bg-surface-2' }}">
+            {% if s.overdue %}
+              🗓 Target date passed on {{ s.fund.target_date.strftime('%d %b %Y') }} —
+              still {{ s.remaining | inr0 }} short.
+            {% elif s.months_left and s.months_left > 0 %}
+              <span class="muted">Set aside</span>
+              <span class="money font-medium text-ink">{{ s.required_monthly | inr0 }}/mo</span>
+              <span class="muted">for {{ s.months_left }} month{{ '' if s.months_left == 1 else 's' }}
+                to reach this by {{ s.fund.target_date.strftime('%b %Y') }}</span>
+            {% else %}
+              <span class="muted">Due {{ s.fund.target_date.strftime('%d %b %Y') }} —</span>
+              <span class="money font-medium text-ink">{{ s.required_monthly | inr0 }}</span>
+              <span class="muted">to earmark this month</span>
+            {% endif %}
+          </div>
+        {% endif %}
 
         <!-- Earmarked from -->
         {% if s.allocs %}

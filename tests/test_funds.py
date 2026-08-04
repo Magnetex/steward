@@ -179,3 +179,89 @@ def test_delete_goal_keeps_assets(seeded):
         assert db.session.get(SinkingFund, fid) is None
         assert FundAllocation.query.filter_by(fund_id=fid).count() == 0
         assert Deposit.query.count() == n_dep       # the FD itself is untouched
+
+
+# --- the pace needed to hit a target date ----------------------------------
+def test_required_monthly_splits_the_remainder_over_the_months_left(seeded):
+    from datetime import date
+    from app.models import SinkingFund
+    from app.services.funds import fund_status
+    from app.extensions import db
+    from app.timeutil import today_ist
+
+    client = seeded.test_client()
+    with seeded.app_context():
+        target_date = date(today_ist().year + 1, today_ist().month, today_ist().day)
+    client.post("/funds/save", data={"name": "Paced goal", "icon": "🎯",
+                                     "target_amount": "120000",
+                                     "target_date": target_date.isoformat()})
+    with seeded.app_context():
+        s = fund_status(SinkingFund.query.filter_by(name="Paced goal").one())
+        assert s["months_left"] == 12
+        assert s["required_monthly"] == Decimal("10000.00")   # nothing saved yet
+        assert s["overdue"] is False
+
+
+def test_required_monthly_rounds_up_so_the_target_is_actually_reached(seeded):
+    """A truncated figure would leave the goal short on the target date."""
+    from datetime import date
+    from app.models import SinkingFund
+    from app.services.funds import fund_status
+    from app.timeutil import today_ist
+
+    client = seeded.test_client()
+    today = today_ist()
+    six_months = date(today.year + (today.month + 6 > 12), (today.month + 6 - 1) % 12 + 1,
+                      today.day)
+    client.post("/funds/save", data={"name": "Rounded goal", "icon": "🎯",
+                                     "target_amount": "250000",
+                                     "target_date": six_months.isoformat()})
+    with seeded.app_context():
+        s = fund_status(SinkingFund.query.filter_by(name="Rounded goal").one())
+        assert s["months_left"] == 6
+        assert s["required_monthly"] == Decimal("41667.00")     # not 41666.67
+        assert s["required_monthly"] * 6 >= s["remaining"]
+
+
+def test_a_passed_target_date_is_flagged_overdue(seeded):
+    from datetime import date, timedelta
+    from app.models import SinkingFund
+    from app.services.funds import fund_status
+    from app.timeutil import today_ist
+
+    client = seeded.test_client()
+    gone = today_ist() - timedelta(days=40)
+    client.post("/funds/save", data={"name": "Late goal", "icon": "🎯",
+                                     "target_amount": "50000",
+                                     "target_date": gone.isoformat()})
+    with seeded.app_context():
+        s = fund_status(SinkingFund.query.filter_by(name="Late goal").one())
+        assert s["overdue"] is True
+        assert s["months_left"] == 0
+        assert s["required_monthly"] == s["remaining"], "the whole remainder is due"
+
+
+def test_a_goal_without_a_target_date_has_no_pace(seeded):
+    from app.models import SinkingFund
+    from app.services.funds import fund_status
+
+    _goal(seeded.test_client(), "Open-ended", 25000)
+    with seeded.app_context():
+        s = fund_status(SinkingFund.query.filter_by(name="Open-ended").one())
+        assert s["months_left"] is None
+        assert s["overdue"] is False
+
+
+def test_the_card_shows_the_monthly_pace(seeded):
+    from datetime import date
+    from app.timeutil import today_ist
+
+    client = seeded.test_client()
+    target_date = date(today_ist().year + 1, today_ist().month, today_ist().day)
+    client.post("/funds/save", data={"name": "Paced goal", "icon": "🎯",
+                                     "target_amount": "120000",
+                                     "target_date": target_date.isoformat()})
+    html = client.get("/funds/").get_data(as_text=True)
+    assert "Set aside" in html
+    assert "10,000/mo" in html
+    assert "for 12 months" in html

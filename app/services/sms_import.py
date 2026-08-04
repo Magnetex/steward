@@ -21,13 +21,14 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 import shutil
 import subprocess
 from datetime import datetime, timedelta
 
 from ..extensions import db
 from ..models import Account, PayeeMemory, PendingImport, Setting, Transaction
-from ..money import money
+from ..money import ZERO, fmt_inr, money
 from ..timeutil import now_ist
 from . import sms_parse
 
@@ -38,6 +39,8 @@ LAST_SCAN_KEY = "sms_last_scan"      # when a scan last ran, for the UI
 
 FETCH_LIMIT = 100        # messages to pull per scan
 DUPLICATE_WINDOW_DAYS = 3  # how far either side to look for a manual entry
+MIN_PAYEE_KEY = 4        # too short to match payees on without false pairings
+MIN_PAYEE_PREFIX = 6     # shared leading characters before two payees are "the same"
 
 
 class SMSUnavailable(Exception):
@@ -168,16 +171,50 @@ def _account_by_hint(hint: str) -> Account | None:
     return None
 
 
-def _category_from_payee(payee: str, txn_type: str) -> int | None:
-    """Reuse the payee memory the manual add-form already builds."""
-    if not payee:
+def _payee_key(payee: str) -> str:
+    """A comparable form of a payee: lowercase letters and digits only."""
+    return re.sub(r"[^a-z0-9]+", "", (payee or "").lower())
+
+
+def _shared_prefix(a: str, b: str) -> int:
+    n = 0
+    for x, y in zip(a, b):
+        if x != y:
+            break
+        n += 1
+    return n
+
+
+def suggest_category(payee: str) -> int | None:
+    """The category last used for this payee, reusing the manual form's memory.
+
+    An exact key match wins. Failing that, the remembered payee sharing the
+    longest prefix with this one, ties broken on how often it has been used.
+    Merchant strings carry an order or terminal reference that changes every
+    time — "SWIGGY*ORD123" then "SWIGGY*ORD98765" — so the two never match
+    exactly and neither is a prefix of the other; what they share is the first
+    nine characters. Hence a shared *prefix* rather than containment.
+
+    This only pre-selects a dropdown the user reviews before confirming, so a
+    loose match costs a correction, never a wrong figure in the ledger.
+    """
+    key = _payee_key(payee)
+    if len(key) < MIN_PAYEE_KEY:
         return None
-    pm = (PayeeMemory.query
-          .filter(db.func.lower(PayeeMemory.payee) == payee.lower())
-          .first())
-    if pm and pm.last_category_id:
-        return pm.last_category_id
-    return None
+
+    best_score, best_category = None, None
+    for pm in PayeeMemory.query.filter(PayeeMemory.last_category_id.isnot(None)).all():
+        other = _payee_key(pm.payee)
+        if len(other) < MIN_PAYEE_KEY:
+            continue
+        if other == key:
+            return pm.last_category_id
+        shared = _shared_prefix(key, other)
+        if shared >= MIN_PAYEE_PREFIX:
+            score = (shared, pm.uses or 0)
+            if best_score is None or score > best_score:
+                best_score, best_category = score, pm.last_category_id
+    return best_category
 
 
 def _find_possible_duplicate(account_id, amount, on, direction) -> Transaction | None:
@@ -230,7 +267,7 @@ def _build_pending(sender, body, received, parsed) -> PendingImport:
         suggested_type=ttype, status="pending",
     )
     if ttype != "transfer":
-        row.category_id = _category_from_payee(parsed.payee, ttype)
+        row.category_id = suggest_category(parsed.payee)
     dup = _find_possible_duplicate(row.account_id, parsed.amount, on, parsed.direction)
     row.duplicate_of_id = dup.id if dup else None
     return row
@@ -303,20 +340,37 @@ def pending_count() -> int:
 
 
 def pending_rows():
-    return (PendingImport.query.filter_by(status="pending")
+    """Pending rows, each carrying the category to pre-select.
+
+    A row that found no category when it was queued is looked up again here,
+    so teaching the payee memory — by confirming one row, or by entering the
+    spend by hand — immediately pre-fills every other row still waiting from
+    that merchant, instead of only the ones scanned afterwards. The suggestion
+    is a transient attribute: nothing is written back until you confirm.
+    """
+    rows = (PendingImport.query.filter_by(status="pending")
             .order_by(PendingImport.txn_date.desc(), PendingImport.id.desc()).all())
+    for row in rows:
+        suggested = row.category_id
+        if suggested is None and row.suggested_type != "transfer":
+            suggested = suggest_category(row.payee)
+        row.suggested_category_id = suggested
+    return rows
 
 
 # --- acting on the queue ---------------------------------------------------
 def confirm(row: PendingImport, *, account_id=None, category_id=None,
             transfer_account_id=None, txn_type=None, payee=None,
-            on=None) -> Transaction:
+            on=None, splits=None) -> Transaction:
     """Turn a reviewed row into a real transaction.
 
     The caller passes whatever the user corrected in the queue; anything left
-    out falls back to what was parsed.
+    out falls back to what was parsed. ``splits`` mirrors the manual add form:
+    a list of ``{"category_id", "amount"}`` that must add up to the message's
+    amount, which is fixed — the bank told us what was spent, so the split
+    divides that figure rather than changing it.
     """
-    from .transactions import _remember_payee
+    from .transactions import _apply_splits, _remember_payee
     from .budget import default_budget_month
 
     ttype = txn_type or row.suggested_type
@@ -324,13 +378,23 @@ def confirm(row: PendingImport, *, account_id=None, category_id=None,
     if not acct:
         raise ValueError("Choose an account before confirming.")
 
+    amount = money(row.amount)
+    parts = [s for s in (splits or []) if money(s.get("amount")) > 0] if ttype == "expense" else []
+    if parts:
+        total = sum((money(s["amount"]) for s in parts), ZERO)
+        if total != amount:
+            raise ValueError(
+                f"Splits add up to {fmt_inr(total)}, but the transaction is "
+                f"{fmt_inr(amount)}.")
+
     when = on or row.txn_date
     txn = Transaction(
-        date=when, amount=money(row.amount), type=ttype,
+        date=when, amount=amount, type=ttype,
         account_id=acct,
         transfer_account_id=(transfer_account_id or row.transfer_account_id)
         if ttype == "transfer" else None,
-        category_id=None if ttype == "transfer" else (category_id or row.category_id),
+        category_id=None if (ttype == "transfer" or parts)
+        else (category_id or row.category_id),
         payee=(payee if payee is not None else row.payee) or "",
         note=f"Imported from {row.bank.upper()} SMS",
         budget_month=default_budget_month(when, ttype),
@@ -338,6 +402,8 @@ def confirm(row: PendingImport, *, account_id=None, category_id=None,
     db.session.add(txn)
     db.session.flush()
 
+    _apply_splits(txn, [{"category_id": s["category_id"], "amount": money(s["amount"])}
+                        for s in parts])
     if txn.payee:
         _remember_payee(txn)
     row.status = "confirmed"

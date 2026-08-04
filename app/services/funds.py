@@ -8,7 +8,7 @@ shows a shortfall rather than over-counting).
 """
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import Decimal, ROUND_CEILING
 
 from ..extensions import db
 from ..models import SinkingFund, FundAllocation
@@ -147,11 +147,19 @@ def fund_status(fund, alloc_index: dict | None = None, value_cache: dict | None 
     remaining = target - saved
     today = today_ist()
     months_left = months_between(today, fund.target_date) if fund.target_date else None
+    overdue = bool(fund.target_date and today > fund.target_date)
 
+    # months_between floors at 0, so "no months left" covers both a date later
+    # this month and one already gone: either way the whole remainder is due
+    # now, and `overdue` is what tells the two apart.
     if remaining <= 0:
         required = ZERO
     elif months_left and months_left > 0:
-        required = money(remaining / Decimal(months_left))
+        # Rounded up to the whole rupee. The card states this as the monthly
+        # figure to set aside, and rounding down would land short of the target
+        # by the time the date arrives.
+        required = money((remaining / Decimal(months_left))
+                         .quantize(Decimal("1"), rounding=ROUND_CEILING))
     else:
         required = max(remaining, ZERO)
 
@@ -189,7 +197,8 @@ def fund_status(fund, alloc_index: dict | None = None, value_cache: dict | None 
     return {
         "fund": fund, "saved": saved, "target": target,
         "remaining": max(remaining, ZERO), "months_left": months_left,
-        "required_monthly": required, "pct": pct, "status": status, "allocs": allocs,
+        "required_monthly": required, "overdue": overdue,
+        "pct": pct, "status": status, "allocs": allocs,
     }
 
 

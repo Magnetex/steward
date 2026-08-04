@@ -35,7 +35,14 @@
 
   <div class="space-y-3">
     {% for r in rows %}
-      <div class="card card-pad" x-data="{ open: false }">
+      <div class="card card-pad"
+           x-data="{ open: false, type: '{{ r.suggested_type }}', splitOn: false,
+                     total: Number('{{ r.amount }}'),
+                     splits: [{ category_id: '', amount: '' }, { category_id: '', amount: '' }],
+                     splitTotal() { return this.splits.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0); },
+                     get splitOk() { return Math.abs(this.splitTotal() - this.total) < 0.005; },
+                     addSplit() { this.splits.push({ category_id: '', amount: '' }); },
+                     removeSplit(i) { this.splits.splice(i, 1); } }">
         <form method="post" action="{{ url_for('imports.confirm', row_id=r.id) }}">
 
           <!-- headline -->
@@ -98,7 +105,7 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label class="field-label">Type</label>
-                <select name="type" class="field-input">
+                <select name="type" class="field-input" x-model="type">
                   {% for t in ['expense', 'income', 'transfer'] %}
                     <option value="{{ t }}" {{ 'selected' if r.suggested_type == t }}>
                       {{ t | capitalize }}</option>
@@ -115,15 +122,18 @@
                   {% endfor %}
                 </select>
               </div>
-              <div>
+              <div x-show="!splitOn">
                 <label class="field-label">Category</label>
-                <select name="category_id" class="field-input">
+                <select name="category_id" class="field-input" :disabled="splitOn">
                   <option value="">— none —</option>
                   {% for c in categories %}
-                    <option value="{{ c.id }}" {{ 'selected' if r.category_id == c.id }}>
+                    <option value="{{ c.id }}" {{ 'selected' if r.suggested_category_id == c.id }}>
                       {{ c.icon }} {{ c.name }}</option>
                   {% endfor %}
                 </select>
+                {% if r.suggested_category_id and not r.category_id %}
+                  <p class="text-xs muted mt-1">Suggested from what you last used for this payee.</p>
+                {% endif %}
               </div>
               <div>
                 <label class="field-label">To account (transfers)</label>
@@ -139,6 +149,39 @@
             <div>
               <label class="field-label">Payee</label>
               <input name="payee" class="field-input" value="{{ r.payee }}">
+            </div>
+
+            <!-- Split across categories (expense only; the amount is the bank's) -->
+            <div x-show="type === 'expense'">
+              <label class="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" x-model="splitOn"
+                       class="rounded border-line text-primary focus:ring-primary/40">
+                Split across categories
+              </label>
+              <div x-show="splitOn" x-cloak class="mt-2 space-y-2">
+                <template x-for="(s, i) in splits" :key="i">
+                  <div class="flex items-center gap-2">
+                    <select name="split_category" x-model="s.category_id" class="field-input flex-1"
+                            :disabled="!splitOn || type !== 'expense'">
+                      <option value="">Category…</option>
+                      {% for c in categories if c.kind == 'expense' %}
+                        <option value="{{ c.id }}">{{ c.icon }} {{ c.name }}</option>
+                      {% endfor %}
+                    </select>
+                    <input name="split_amount" x-model="s.amount" inputmode="decimal"
+                           class="field-input w-28 money" placeholder="0.00"
+                           :disabled="!splitOn || type !== 'expense'">
+                    <button type="button" class="muted hover:text-danger px-1"
+                            @click="removeSplit(i)" aria-label="Remove split">✕</button>
+                  </div>
+                </template>
+                <div class="flex items-center justify-between text-sm">
+                  <button type="button" class="text-primary hover:underline" @click="addSplit()">+ Add split</button>
+                  <span class="muted">Sum
+                    <span class="money" :class="splitOk ? 'text-primary' : 'text-danger'" x-text="splitTotal()"></span>
+                    / <span class="money">{{ r.amount | inr0 }}</span></span>
+                </div>
+              </div>
             </div>
             <details class="text-xs">
               <summary class="muted cursor-pointer">Original message</summary>
