@@ -27,7 +27,7 @@
                     aria-label="Fund actions" aria-haspopup="menu" :aria-expanded="o">⋯</button>
             <div x-show="o" x-cloak class="absolute right-0 mt-1 w-36 card shadow-pop overflow-hidden z-10 text-sm">
               <button class="block w-full text-left px-3 py-2 hover:bg-surface-2"
-                      @click='o=false; openEditFund({{ {"id": s.fund.id, "name": s.fund.name, "target_amount": s.fund.target_amount|string, "target_date": s.fund.target_date.isoformat() if s.fund.target_date else "", "icon": s.fund.icon, "note": s.fund.note} | tojson }})'>Edit</button>
+                      @click='o=false; openEditFund({{ {"id": s.fund.id, "name": s.fund.name, "target_amount": s.fund.target_amount|string, "target_date": s.fund.target_date.isoformat() if s.fund.target_date else "", "icon": s.fund.icon, "note": s.fund.note, "saved": s.saved|string} | tojson }})'>Edit</button>
               <form method="post" action="{{ url_for('funds.delete', fund_id=s.fund.id) }}"
                     onsubmit="return confirm('Remove this goal? Earmarks are released; your assets are untouched.')">
                 <button class="block w-full text-left px-3 py-2 hover:bg-surface-2 text-danger">Delete</button>

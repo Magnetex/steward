@@ -221,7 +221,19 @@
 
   // --- Sinking funds page (two modals: goal + allocate) -----------------
   window.fundsPage = function () {
-    var blankFund = { id: "", name: "", target_amount: "", target_date: "", icon: "🎯", note: "" };
+    var blankFund = { id: "", name: "", target_amount: "", target_date: "",
+                      icon: "🎯", note: "", saved: "0" };
+
+    // Mirrors timeutil.months_between: whole months, floored at zero. Kept in
+    // step with the server on purpose — the modal's preview and the goal card
+    // must never quote different figures for the same date.
+    function monthsBetween(from, to) {
+      var a = from.split("-").map(Number), b = to.split("-").map(Number);
+      var diff = (b[0] - a[0]) * 12 + (b[1] - a[1]);
+      if (b[2] < a[2]) diff -= 1;
+      return Math.max(diff, 0);
+    }
+
     return {
       fundModalOpen: false,
       allocOpen: false,
@@ -229,6 +241,28 @@
       fundForm: Object.assign({}, blankFund),
       alloc: { fundId: "", fundName: "", source: "", amount: "" },
       spend: { fundId: "", name: "", allocs: [], picked: [], amount: "", date: "", payee: "", archive: true },
+
+      /* What the chosen target date costs per month, live while you type, so
+         the date can be picked against what you can actually set aside rather
+         than discovered after saving. Null when there is nothing to say. */
+      get pace() {
+        var target = parseFloat(this.fundForm.target_amount);
+        var when = this.fundForm.target_date;
+        var today = (this.$root && this.$root.dataset.today) || "";
+        if (!(target > 0) || !when || !today) return null;
+
+        var remaining = Math.max(target - (parseFloat(this.fundForm.saved) || 0), 0);
+        if (remaining <= 0) return { state: "funded" };
+        if (when < today) return { state: "past" };
+
+        var months = monthsBetween(today, when);
+        if (months < 1) return { state: "now", monthly: this.rupees(remaining) };
+        // Rounded up, as funds.fund_status does, so the goal isn't left short.
+        return { state: "pace", months: months,
+                 monthly: this.rupees(Math.ceil(remaining / months)) };
+      },
+      rupees(v) { return "₹" + Math.round(v).toLocaleString("en-IN"); },
+
       openNewFund() { this.fundForm = Object.assign({}, blankFund); this.fundModalOpen = true; },
       openEditFund(d) { this.fundForm = Object.assign({}, blankFund, d); this.fundModalOpen = true; },
       openAllocate(id, name) {

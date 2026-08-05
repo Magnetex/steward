@@ -38,6 +38,30 @@
             <div><label class="field-label">Target date</label>
               <input name="target_date" type="date" class="field-input" x-model="fundForm.target_date"></div>
           </div>
+
+          {# What that date costs per month, live — so it can be set against
+             what you can actually put aside, without saving to find out. #}
+          <div x-show="pace" x-cloak class="rounded-xl px-3 py-2 text-xs"
+               :class="pace && pace.state === 'past' ? 'bg-danger-soft text-danger' : 'bg-surface-2'">
+            <template x-if="pace && pace.state === 'pace'">
+              <p><span class="muted">You'd set aside</span>
+                <span class="money font-medium text-ink" x-text="pace.monthly + '/mo'"></span>
+                <span class="muted">for</span>
+                <span class="font-medium text-ink" x-text="pace.months"></span>
+                <span class="muted">month<span x-show="pace.months !== 1">s</span> to reach this by then.</span></p>
+            </template>
+            <template x-if="pace && pace.state === 'now'">
+              <p><span class="muted">That date falls this month — the whole</span>
+                <span class="money font-medium text-ink" x-text="pace.monthly"></span>
+                <span class="muted">would be due now.</span></p>
+            </template>
+            <template x-if="pace && pace.state === 'past'">
+              <p>That date has already passed — pick a later one.</p>
+            </template>
+            <template x-if="pace && pace.state === 'funded'">
+              <p class="muted">Already covered by what's earmarked toward this goal.</p>
+            </template>
+          </div>
           <div><label class="field-label">Note (optional)</label>
             <input name="note" class="field-input" x-model="fundForm.note" placeholder="e.g. six months of expenses"></div>
           <p class="text-xs muted">A goal holds no money of its own — you earmark parts of your FDs, funds, gold, stocks or cash toward it.</p>

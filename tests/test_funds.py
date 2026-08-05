@@ -265,3 +265,26 @@ def test_the_card_shows_the_monthly_pace(seeded):
     assert "Set aside" in html
     assert "10,000/mo" in html
     assert "for 12 months" in html
+
+
+def test_the_goal_modal_previews_the_monthly_pace(seeded):
+    """The date can be chosen against capacity without saving to find out.
+
+    The figure itself is computed in fundsPage().pace, which mirrors
+    fund_status; this only guards the wiring that feeds it.
+    """
+    html = seeded.test_client().get("/funds/").get_data(as_text=True)
+    assert 'x-show="pace"' in html
+    assert "pace.monthly" in html
+    assert "pace.months" in html
+    assert 'data-today=' in html, "the preview needs today's date to count from"
+
+
+def test_editing_a_goal_hands_the_modal_what_is_already_saved(seeded):
+    """Otherwise a part-funded goal would preview a pace its own card denies."""
+    from app.services.funds import all_fund_statuses
+    html = seeded.test_client().get("/funds/").get_data(as_text=True)
+    with seeded.app_context():
+        saved = all_fund_statuses()[0]["saved"]
+    assert "&#34;saved&#34;" in html or '"saved"' in html
+    assert str(saved) in html
