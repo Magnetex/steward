@@ -17,7 +17,8 @@
     {% if acc.series %}
       <div class="card card-pad mb-5">
         <p class="muted text-xs mb-2">Running balance</p>
-        <div id="epf-chart" class="h-56"
+        {# The month-by-month table below is this chart's text equivalent. #}
+        <div id="epf-chart" class="h-56" aria-hidden="true"
              data-cats='{{ acc.series | map(attribute="entry") | map(attribute="month") | map("string") | list | tojson }}'
              data-vals='{{ acc.series | map(attribute="balance") | map("float") | list | tojson }}'></div>
       </div>

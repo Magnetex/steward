@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Categories · Steward{% endblock %}
 {% block content %}
+{% from "_macros.html" import actions_menu %}
 <div x-data="categoriesPage()">
   <div class="flex items-center justify-between mb-2">
     <div>
@@ -22,11 +23,8 @@
       {% if locked %}
         <span class="chip-neutral shrink-0" title="Fixed — backs a Savings tab">🔒 fixed</span>
       {% else %}
-      <div x-data="{ o:false }" class="relative shrink-0">
-        <button class="muted hover:text-ink px-2" @click="o=!o" @click.outside="o=false"
-                aria-label="Category actions" aria-haspopup="menu" :aria-expanded="o">⋯</button>
-        <div x-show="o" x-cloak class="absolute right-0 mt-1 w-36 card shadow-pop overflow-hidden z-10 text-sm">
-          <button class="block w-full text-left px-3 py-2 hover:bg-surface-2"
+      {% call actions_menu("Category actions", "w-36") %}
+          <button type="button" class="block w-full text-left px-3 py-2 hover:bg-surface-2"
                   @click='o=false; openEdit({{ {"id": c.id, "name": c.name, "kind": c.kind, "icon": c.icon, "group": c.group, "locked": used[c.id] > 0} | tojson }})'>Edit</button>
           <form method="post" action="{{ url_for('categories.archive', cat_id=c.id) }}">
             <button class="block w-full text-left px-3 py-2 hover:bg-surface-2">{{ 'Restore' if c.is_archived else 'Archive' }}</button>
@@ -37,8 +35,7 @@
                     {{ 'disabled' if used[c.id] }}
                     title="{{ 'In use — archive instead' if used[c.id] else 'Delete' }}">Delete</button>
           </form>
-        </div>
-      </div>
+      {% endcall %}
       {% endif %}
     </div>
   {% endmacro %}

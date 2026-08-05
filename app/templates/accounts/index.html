@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Accounts · Steward{% endblock %}
 {% block content %}
+{% from "_macros.html" import actions_menu %}
 <div x-data="accountsPage()">
   <div class="flex items-center justify-between mb-5">
     <div>
@@ -26,11 +27,8 @@
               <p class="text-xs muted">{{ type_labels.get(account.type, account.type) }}{% if account.is_archived %} · archived{% endif %}</p>
             </div>
           </div>
-          <div x-data="{ o: false }" class="relative shrink-0">
-            <button class="muted hover:text-ink px-2" @click="o=!o" @click.outside="o=false"
-                    aria-label="Account actions" aria-haspopup="menu" :aria-expanded="o">⋯</button>
-            <div x-show="o" x-cloak class="absolute right-0 mt-1 w-40 card shadow-pop overflow-hidden z-10 text-sm">
-              <button class="block w-full text-left px-3 py-2 hover:bg-surface-2"
+          {% call actions_menu("Account actions") %}
+              <button type="button" class="block w-full text-left px-3 py-2 hover:bg-surface-2"
                       @click='o=false; openEdit({{ {"id": account.id, "name": account.name, "type": account.type, "opening_balance": account.opening_balance|string, "icon": account.icon, "color": account.color, "sms_identifiers": account.sms_identifiers or ""} | tojson }})'>Edit</button>
               <form method="post" action="{{ url_for('accounts.archive', account_id=account.id) }}">
                 <button class="block w-full text-left px-3 py-2 hover:bg-surface-2">{{ 'Restore' if account.is_archived else 'Archive' }}</button>
@@ -39,8 +37,7 @@
                     onsubmit="return confirm('Delete this account?')">
                 <button class="block w-full text-left px-3 py-2 hover:bg-surface-2 text-danger">Delete</button>
               </form>
-            </div>
-          </div>
+          {% endcall %}
         </div>
         <div class="mt-4 flex items-end justify-between">
           <div>

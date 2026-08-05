@@ -55,6 +55,65 @@
   {% endif %}
 {% endmacro %}
 
+{#
+  A ⋯ row-actions menu. Call it with the items as the body:
+
+      {% call actions_menu("Fund actions", "w-36") %}
+        <button ... @click="o=false; doThing()">Edit</button>
+      {% endcall %}
+
+  Keyboard behaviour (arrows, Home/End, Escape, Tab) lives in rowMenu() in
+  app.js; the items are tagged role="menuitem" when the menu opens. The state
+  is still called `o`, so `@click="o=false; …"` inside the items keeps working.
+#}
+{% macro actions_menu(label, width='w-40') %}
+  <div x-data="rowMenu()" class="relative shrink-0"
+       @keydown.escape="if (o) { $event.stopPropagation(); close(true) }">
+    <button type="button" x-ref="trigger" class="muted hover:text-ink px-2"
+            @click="toggle($event)" @click.outside="close(false)"
+            @keydown.down.prevent="openAt(0)" @keydown.up.prevent="openAt(-1)"
+            aria-label="{{ label }}" aria-haspopup="menu" :aria-expanded="o">⋯</button>
+    <div x-show="o" x-cloak x-ref="menu" role="menu" aria-label="{{ label }}"
+         class="absolute right-0 mt-1 {{ width }} card shadow-pop overflow-hidden z-10 text-sm"
+         @keydown.down.prevent="move(1)" @keydown.up.prevent="move(-1)"
+         @keydown.home.prevent="focusAt(0)" @keydown.end.prevent="focusAt(-1)"
+         @keydown.tab="close(false)">
+      {{ caller() }}
+    </div>
+  </div>
+{% endmacro %}
+
+{#
+  The text equivalent of a chart: `rows` is a list of lists, first cell the
+  label, the rest already formatted. Screen readers read this instead of the
+  SVG (which is marked aria-hidden), and Steward.checkCharts drops the sr-only
+  class if the chart can't be drawn at all — so the numbers are still there
+  with scripting off or ApexCharts missing.
+#}
+{% macro chart_table(chart_id, caption, headers, rows) %}
+  <div class="sr-only" data-chart-fallback="{{ chart_id }}">
+    <table class="w-full text-sm mt-3">
+      <caption class="text-xs muted text-left mb-1">{{ caption }}</caption>
+      <thead class="text-xs muted">
+        <tr class="border-b border-line">
+          {% for h in headers %}
+            <th class="{{ 'text-left' if loop.first else 'text-right' }} font-medium px-2 py-1">{{ h }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-line">
+        {% for r in rows %}
+          <tr>
+            {% for cell in r %}
+              <td class="px-2 py-1 {{ '' if loop.first else 'money text-right' }}">{{ cell }}</td>
+            {% endfor %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endmacro %}
+
 {% macro amount(value, kind='') %}
   <span class="money {{ 'text-primary' if kind == 'income' else 'text-danger' if kind == 'expense-neg' else '' }}">
     {{ value | inr }}

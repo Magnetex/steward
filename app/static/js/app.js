@@ -202,6 +202,51 @@
     };
   };
 
+  /* --- The ⋯ row-action menus -------------------------------------------
+     Behaviour behind the actions_menu macro. The items are whatever the call
+     site put inside, so they're discovered from the DOM rather than declared
+     here, and tagged role="menuitem" once the menu is open.
+
+     Focus only moves into the menu when it was opened from the keyboard: a
+     MouseEvent from Enter/Space carries detail === 0, a real pointer press
+     does not. Pulling focus on a tap would scroll the phone to the menu for
+     no reason. */
+  window.rowMenu = function () {
+    return {
+      o: false,
+      items() {
+        if (!this.$refs.menu) return [];
+        return Array.prototype.filter.call(
+          this.$refs.menu.querySelectorAll("button, a[href]"),
+          function (el) { return !el.disabled; });
+      },
+      toggle(e) {
+        this.o = !this.o;
+        if (this.o && e && e.detail === 0) this.focusAt(0);
+      },
+      openAt(i) { this.o = true; this.focusAt(i); },
+      close(refocus) {
+        this.o = false;
+        if (refocus && this.$refs.trigger) this.$refs.trigger.focus();
+      },
+      focusAt(i) {
+        this.$nextTick(() => {                     // wait for x-show to reveal it
+          var els = this.items();
+          if (!els.length) return;
+          els.forEach(function (el) { el.setAttribute("role", "menuitem"); });
+          (i < 0 ? els[els.length - 1] : els[Math.min(i, els.length - 1)]).focus();
+        });
+      },
+      move(step) {
+        var els = this.items();
+        if (!els.length) return;
+        var at = els.indexOf(document.activeElement);
+        if (at === -1) return this.focusAt(step > 0 ? 0 : -1);
+        els[(at + step + els.length) % els.length].focus();
+      },
+    };
+  };
+
   // --- Recurring rules page modal ---------------------------------------
   window.recurringPage = function () {
     var blank = {
@@ -500,10 +545,39 @@
   function mount(el, opts) {
     if (!el || !window.ApexCharts) return null;
     if (el._chart) { try { el._chart.destroy(); } catch (e) {} }
-    el._chart = new ApexCharts(el, opts);
-    el._chart.render();
+    try {
+      el._chart = new ApexCharts(el, opts);
+      el._chart.render();
+    } catch (e) {
+      el._chart = null;
+      el._chartFailed = true;       // checkCharts shows the table instead
+      return null;
+    }
     return el._chart;
   }
+
+  /* A chart is an SVG: it reads as noise to a screen reader, and it is simply
+     absent if ApexCharts never loads. Charts that aren't already sitting next
+     to a visible list carry a table marked data-chart-fallback, kept sr-only
+     while the chart is up and revealed when it can't be drawn. Charts render
+     lazily in places (the composition tab draws on first view), so "no chart
+     yet" is only treated as failure once it's clear none is coming. */
+  function chartMissing(el) {
+    if (!el) return true;
+    if (el._chart) return false;
+    if (el._chartFailed) return true;
+    return !window.ApexCharts;
+  }
+
+  Steward.checkCharts = function () {
+    var nodes = document.querySelectorAll("[data-chart-fallback]");
+    Array.prototype.forEach.call(nodes, function (fb) {
+      var el = document.getElementById(fb.dataset.chartFallback);
+      fb.classList.toggle("sr-only", !chartMissing(el));
+    });
+  };
+  window.addEventListener("load", Steward.checkCharts);
+  document.addEventListener("htmx:afterSettle", Steward.checkCharts);
 
   Steward.donut = function (el, labels, values) {
     return mount(el, Object.assign(Steward.baseChartOptions(), {

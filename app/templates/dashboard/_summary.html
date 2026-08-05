@@ -17,7 +17,8 @@
   <div class="card card-pad">
     <p class="muted text-sm">Net worth</p>
     <p class="font-display text-3xl mt-1 money">{{ networth | inr0 }}</p>
-    <div id="nw-spark" class="mt-1 -mb-1 h-11" data-series="{{ spark | tojson }}"></div>
+    {# Decoration behind the figure above — nothing here a reader needs. #}
+    <div id="nw-spark" class="mt-1 -mb-1 h-11" aria-hidden="true" data-series="{{ spark | tojson }}"></div>
   </div>
 </div>
 <script>

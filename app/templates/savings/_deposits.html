@@ -1,4 +1,4 @@
-{% from "_macros.html" import bar, earmark_line %}
+{% from "_macros.html" import bar, earmark_line, actions_menu %}
 <div x-data="{ open:false, form:{ id:'', kind:'FD', bank:'', principal:'', installment:'', interest_rate:'', compounding:'quarterly', start_date:'{{ today }}', tenure_months:12, note:'', account_id:'' },
              openNew(){ this.form={ id:'', kind:'FD', bank:'', principal:'', installment:'', interest_rate:'', compounding:'quarterly', start_date:'{{ today }}', tenure_months:12, note:'', account_id:'' }; this.open=true; },
              openEdit(d){ this.form=Object.assign({ account_id:'' }, d); this.open=true; },
@@ -26,19 +26,15 @@
                 · {{ d.interest_rate }}% {{ d.compounding }} · {{ d.tenure_months }} mo
               </p>
             </div>
-            <div x-data="{ o:false }" class="relative shrink-0">
-              <button class="muted hover:text-ink px-2" @click="o=!o" @click.outside="o=false"
-                      aria-label="Deposit actions" aria-haspopup="menu" :aria-expanded="o">⋯</button>
-              <div x-show="o" x-cloak class="absolute right-0 mt-1 w-32 card shadow-pop overflow-hidden z-10 text-sm">
-                <button class="block w-full text-left px-3 py-2 hover:bg-surface-2"
+            {% call actions_menu("Deposit actions", "w-32") %}
+                <button type="button" class="block w-full text-left px-3 py-2 hover:bg-surface-2"
                         @click='o=false; openEdit({{ {"id": d.id, "kind": d.kind, "bank": d.bank, "principal": d.principal|string, "installment": d.installment|string, "interest_rate": d.interest_rate|string, "compounding": d.compounding, "start_date": d.start_date.isoformat(), "tenure_months": d.tenure_months, "note": d.note} | tojson }})'>Edit</button>
-                <button class="block w-full text-left px-3 py-2 hover:bg-surface-2"
+                <button type="button" class="block w-full text-left px-3 py-2 hover:bg-surface-2"
                         @click='o=false; openClose({{ {"id": d.id, "kind": d.kind, "bank": d.bank, "proceeds": s.accrued_value|string, "account_id": d.account_id or ""} | tojson }})'>{{ 'Close & deposit' if s.matured else 'Close early' }}</button>
                 <form method="post" action="{{ url_for('savings.deposit_delete', dep_id=d.id) }}" onsubmit="return confirm('Delete deposit?')">
                   <button class="block w-full text-left px-3 py-2 hover:bg-surface-2 text-danger">Delete</button>
                 </form>
-              </div>
-            </div>
+            {% endcall %}
           </div>
 
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 text-sm">

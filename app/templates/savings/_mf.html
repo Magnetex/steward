@@ -1,4 +1,4 @@
-{% from "_macros.html" import bar, earmark_line %}
+{% from "_macros.html" import bar, earmark_line, actions_menu %}
 <div x-data="mfPage()" data-today="{{ today }}">
   <!-- Summary + actions -->
   <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
@@ -43,12 +43,9 @@
                 {% if s.account %} · from {{ s.account.icon }} {{ s.account.name }}{% endif %}
               </p>
             </div>
-            <div x-data="{ o:false }" class="relative shrink-0">
-              <button class="muted hover:text-ink px-2" @click="o=!o" @click.outside="o=false"
-                      aria-label="SIP actions" aria-haspopup="menu" :aria-expanded="o">⋯</button>
-              <div x-show="o" x-cloak class="absolute right-0 mt-1 w-40 card shadow-pop overflow-hidden z-10 text-sm">
+            {% call actions_menu("SIP actions") %}
                 {% if s.plan.active %}
-                  <button class="block w-full text-left px-3 py-2 hover:bg-surface-2"
+                  <button type="button" class="block w-full text-left px-3 py-2 hover:bg-surface-2"
                           hx-post="{{ url_for('savings.mf_sip_stop', plan_id=s.plan.id) }}"
                           hx-confirm="Stop this SIP? Past investments are kept; no more monthly buys." hx-swap="none">Stop SIP</button>
                 {% endif %}
@@ -57,8 +54,7 @@
                           hx-post="{{ url_for('savings.mf_sip_delete', plan_id=s.plan.id) }}"
                           hx-confirm="Remove this SIP plan? Past installments stay in your holding." hx-swap="none">Delete plan</button>
                 </form>
-              </div>
-            </div>
+            {% endcall %}
           </div>
         {% endfor %}
       </div>
@@ -84,18 +80,14 @@
                   {{ h.fund_house }} · {{ h.plan_type }} · {{ h.asset_type }}{% if h.goal %} · {{ h.goal }}{% endif %}
                 </p>
               </div>
-              <div x-data="{ o:false }" class="relative shrink-0">
-                <button class="muted hover:text-ink px-2" @click="o=!o" @click.outside="o=false"
-                        aria-label="Holding actions" aria-haspopup="menu" :aria-expanded="o">⋯</button>
-                <div x-show="o" x-cloak class="absolute right-0 mt-1 w-40 card shadow-pop overflow-hidden z-10 text-sm">
-                  <button class="block w-full text-left px-3 py-2 hover:bg-surface-2"
+              {% call actions_menu("Holding actions") %}
+                  <button type="button" class="block w-full text-left px-3 py-2 hover:bg-surface-2"
                           @click="o=false; openTxn({{ h.id }}, '{{ h.scheme_name|e }}', '{{ h.scheme_code }}')">Add SIP / buy / sell</button>
                   <form method="post" action="{{ url_for('savings.mf_holding_delete', holding_id=h.id) }}"
                         onsubmit="return confirm('Remove this holding and its history?')">
                     <button class="block w-full text-left px-3 py-2 hover:bg-surface-2 text-danger">Delete holding</button>
                   </form>
-                </div>
-              </div>
+              {% endcall %}
             </div>
 
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
