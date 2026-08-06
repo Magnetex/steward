@@ -147,15 +147,28 @@ retries once, and on failure keeps the cached value.
 
 **APScheduler** runs inside the app and refreshes automatically (IST):
 
-- **21:30** — mutual fund NAVs (published after market close)
+- **06:00** — recurring rules, SIP and RD installments, matured deposits
+- **07:15 & 20:15** — sweep maturity / overshoot / reconciliation alerts
 - **08:00** — gold, USD→INR, and stock prices
-- **06:00** — materialize due recurring rules
+- **21:00** — back up to shared storage
+- **21:30** — mutual fund NAVs (published after market close)
+- **22:00** — scan bank SMS into the review queue
 - **23:00** — record a net-worth snapshot
-- **07:15 & 20:15** — sweep maturity / overshoot alerts
+
+A cron time only fires if the process is alive at that minute, which on the
+phone it usually isn't — Termux runs while the app is open and stops soon
+after. So each job records when it last ran, and anything overdue is **caught
+up shortly after the app starts**. Without that, opening the app for a minute a
+day meant SIP and RD installments never posted, matured deposits never closed,
+and the net-worth trend never gained a point.
+
+The first time it runs on a database it plants the watermarks without executing
+anything, so a fresh install doesn't fire off a burst of fetches and a backup.
 
 Trigger the same logic manually:
 
 ```bash
+flask catch-up           # run whatever was missed while the app was closed
 flask refresh-prices     # MF NAVs, gold, USDINR, stock — prints per-instrument status
 flask run-recurring      # process due recurring rules (auto-create + remind-only)
 flask snapshot           # record a net-worth snapshot now

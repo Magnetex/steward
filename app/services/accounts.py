@@ -9,19 +9,26 @@ from ..models import Account, Transaction, CASH_LIKE_TYPES
 from ..money import ZERO, money
 
 
-def all_balances() -> dict[int, Decimal]:
+def all_balances(as_of=None) -> dict[int, Decimal]:
     """Balance for every account in one pass (opening + inflows - outflows).
 
     Transfers move money: they subtract from ``account_id`` and add to
     ``transfer_account_id``. Split children are ignored (the parent already
     carries the full amount against its account).
+
+    ``as_of`` stops at a date (inclusive), which is what reconciliation needs:
+    a bank's stated balance is a fact about one moment, so it has to be
+    compared against the ledger at that moment rather than today's.
     """
     balances: dict[int, Decimal] = {}
     for acc in Account.query.all():
         balances[acc.id] = money(acc.opening_balance or ZERO)
 
     # Only parent/standalone rows affect balances (parent_id IS NULL).
-    rows = Transaction.query.filter(Transaction.parent_id.is_(None)).all()
+    q = Transaction.query.filter(Transaction.parent_id.is_(None))
+    if as_of is not None:
+        q = q.filter(Transaction.date <= as_of)
+    rows = q.all()
     for t in rows:
         amt = money(t.amount)
         if t.type == "income":

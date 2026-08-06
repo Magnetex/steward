@@ -15,6 +15,68 @@
     </button>
   </div>
 
+  {% if reconcile.checks %}
+    {# The bank's own figure, from the balance quoted in its SMS alerts. #}
+    <div class="card mb-5" x-data="{ open: {{ 'true' if reconcile.off else 'false' }} }">
+      <button type="button" class="w-full card-pad !py-3 flex items-center justify-between text-left"
+              @click="open = !open" :aria-expanded="open" aria-controls="reconcile-rows">
+        <span class="flex items-center gap-2 text-sm">
+          <span class="font-medium">Against your bank</span>
+          {% if reconcile.off %}
+            <span class="chip-danger">{{ reconcile.off | length }} to check</span>
+          {% elif reconcile.waiting %}
+            <span class="chip-warn">{{ reconcile.waiting | length }} awaiting review</span>
+          {% else %}
+            <span class="chip-primary">All matched</span>
+          {% endif %}
+        </span>
+        <span class="muted text-xs" x-text="open ? '▲' : '▼'"></span>
+      </button>
+      <div x-show="open" x-cloak id="reconcile-rows" class="border-t border-line divide-y divide-line">
+        {% for c in reconcile.checks %}
+          <div class="px-5 py-3">
+            <div class="flex items-center justify-between gap-3 text-sm">
+              <span class="flex items-center gap-2 min-w-0">
+                <span>{{ c.account.icon }}</span>
+                <span class="truncate">{{ c.account.name }}</span>
+              </span>
+              <span class="shrink-0">
+                {% if c.matched %}
+                  <span class="chip-primary">matches</span>
+                {% else %}
+                  <span class="money font-medium {{ 'text-warn' if c.explained else 'text-danger' }}">
+                    {{ (c.difference if c.difference > 0 else -c.difference) | inr0 }}
+                    {{ 'more' if c.difference > 0 else 'less' }}</span>
+                {% endif %}
+              </span>
+            </div>
+            <p class="text-xs muted mt-1">
+              {{ c.bank | upper }} stated <span class="money">{{ c.stated | inr0 }}</span>
+              on {{ c.on.strftime('%d %b %Y') }} · ledger
+              <span class="money">{{ c.ledger | inr0 }}</span> for the same date
+            </p>
+            {% if c.explained %}
+              <p class="text-xs mt-1">
+                <a href="{{ url_for('imports.index') }}" class="text-primary hover:underline">
+                  {{ c.waiting }} import{{ '' if c.waiting == 1 else 's' }} still waiting for review</a>
+                <span class="muted">— confirm those first.</span>
+              </p>
+            {% elif not c.matched %}
+              <p class="text-xs mt-1">
+                <a href="{{ url_for('transactions.index', account=c.account.id) }}"
+                   class="text-primary hover:underline">Look for a missing or duplicated entry →</a>
+              </p>
+            {% endif %}
+          </div>
+        {% endfor %}
+        <p class="px-5 py-2 text-xs muted">
+          Compared at the moment of the bank's message — anything you entered later
+          the same day shows here as a difference.
+        </p>
+      </div>
+    </div>
+  {% endif %}
+
   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
     {% for account, balance in pairs %}
       <div class="card card-pad {{ 'opacity-60' if account.is_archived }}">

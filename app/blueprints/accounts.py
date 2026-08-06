@@ -7,6 +7,7 @@ from ..extensions import db
 from ..models import Account, Transaction, ACCOUNT_TYPES
 from ..money import money
 from ..services import accounts as acc_svc
+from ..services import reconcile as reconcile_svc
 
 bp = Blueprint("accounts", __name__, url_prefix="/accounts")
 
@@ -25,7 +26,8 @@ def index():
              if a.type != "fund"]
     return render_template("accounts/index.html", pairs=pairs, types=ACCOUNT_TYPES,
                            type_labels=TYPE_LABELS, type_icons=TYPE_ICONS,
-                           available=acc_svc.available_total())
+                           available=acc_svc.available_total(),
+                           reconcile=reconcile_svc.summary())
 
 
 @bp.route("/save", methods=["POST"])

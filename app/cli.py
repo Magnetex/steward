@@ -19,6 +19,7 @@ def register_cli(app: Flask) -> None:
     app.cli.add_command(refresh_prices)
     app.cli.add_command(run_recurring)
     app.cli.add_command(snapshot)
+    app.cli.add_command(catch_up)
 
 
 @click.command("init-db")
@@ -191,3 +192,21 @@ def snapshot():
     from .services.networth import take_snapshot
     snap = take_snapshot()
     click.echo(f"Snapshot for {snap.date}: total {snap.total}")
+
+
+@click.command("catch-up")
+@click.option("--force", is_flag=True,
+              help="Run overdue jobs even on a database that has never run any.")
+@with_appcontext
+def catch_up(force):
+    """Run any daily job missed while the app was closed."""
+    from .scheduler import catch_up as run_catch_up, overdue_jobs
+    if force is False:
+        pending = overdue_jobs()
+        click.echo(f"Overdue: {', '.join(pending) if pending else 'nothing'}")
+    result = run_catch_up(force=force)
+    if result["first_run"]:
+        click.echo("First run — watermarks planted, nothing executed.")
+    else:
+        click.echo(f"Ran: {', '.join(result['ran']) or 'nothing'}"
+                   + (f" · failed: {', '.join(result['failed'])}" if result["failed"] else ""))

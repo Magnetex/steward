@@ -60,6 +60,11 @@ def sweep_all() -> None:
         sweep_backup_alert()
     except Exception:
         pass
+    try:
+        from .reconcile import sweep_reconciliation_alerts
+        sweep_reconciliation_alerts()
+    except Exception:
+        pass
     db.session.commit()
 
 
