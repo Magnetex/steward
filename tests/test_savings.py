@@ -148,12 +148,12 @@ def test_sell_credits_cash(seeded):
 # Deposits: FD one-shot, RD recurring
 # ---------------------------------------------------------------------------
 def test_gold_buy_derives_grams_from_amount(seeded):
-    """The gold form now asks for the rupee amount; grams = amount ÷ price."""
+    """The gold form asks for the rupee amount; grams come from the gold value."""
     from app.models import GoldTransaction
     client = seeded.test_client()
     # No grams sent — the backend must derive them from amount and price.
     r = client.post("/savings/gold/txn/save", data={
-        "type": "buy", "date": "2026-07-10",
+        "type": "buy", "date": "2026-07-10", "gst_pct": "0",
         "amount": "5000", "price_per_gram": "10000"})
     assert r.status_code == 204
     with seeded.app_context():
@@ -166,6 +166,121 @@ def test_gold_buy_derives_grams_from_amount(seeded):
     r2 = client.post("/savings/gold/txn/save", data={
         "type": "buy", "price_per_gram": "10000"})
     assert r2.status_code == 200                    # toast error, no 204 create
+
+
+# ---------------------------------------------------------------------------
+# Digital gold is bought GST-inclusive (3%): the bank debits the round figure,
+# and part of it is tax rather than metal.
+# ---------------------------------------------------------------------------
+def test_gold_buy_splits_gst_out_of_the_amount_paid(seeded):
+    from app.models import GoldTransaction
+    client = seeded.test_client()
+    r = client.post("/savings/gold/txn/save", data={
+        "type": "buy", "date": "2026-07-10",
+        "amount": "5000", "price_per_gram": "10000"})   # no gst_pct -> default 3%
+    assert r.status_code == 204
+    with seeded.app_context():
+        t = GoldTransaction.query.order_by(GoldTransaction.id.desc()).first()
+        assert t.amount == Decimal("4854.37"), "gold value is 5000 / 1.03"
+        assert t.gst_amount == Decimal("145.63")
+        assert t.paid == Decimal("5000.00"), "what the bank actually debited"
+        assert t.amount + t.gst_amount == Decimal("5000.00")
+        assert t.grams == Decimal("0.4854"), "grams buy the metal, not the tax"
+
+
+def test_gold_buy_deducts_the_whole_debit_from_cash(seeded):
+    """Cash has to match the bank statement, GST included."""
+    from app.services import accounts as acc
+    client = seeded.test_client()
+    with seeded.app_context():
+        aid = _hdfc_id(seeded)
+        before = acc.account_balance(aid)
+
+    client.post("/savings/gold/txn/save", data={
+        "type": "buy", "date": "2026-07-10", "amount": "5000",
+        "price_per_gram": "10000", "account_id": str(aid)})
+
+    with seeded.app_context():
+        assert acc.account_balance(aid) == before - Decimal("5000.00")
+
+
+def test_gold_buy_drops_net_worth_by_exactly_the_gst(seeded):
+    """The tax is money genuinely gone — not a neutral asset swap."""
+    from app.services import networth as nw
+    client = seeded.test_client()
+    with seeded.app_context():
+        aid = _hdfc_id(seeded)
+        # A fixed manual rate, so the valuation can't drift under the test.
+        from app.models import Setting
+        from app.extensions import db
+        Setting.set("gold_manual_rate", "10000")
+        db.session.commit()
+        before = nw.current_total()
+
+    client.post("/savings/gold/txn/save", data={
+        "type": "buy", "date": "2026-07-10", "amount": "5000",
+        "price_per_gram": "10000", "account_id": str(aid)})
+
+    with seeded.app_context():
+        # cash -5000, gold +4854 (0.4854 g at 10000). Grams are stored at 4dp,
+        # as the platforms quote them, so the drop lands on the GST to within
+        # a rupee rather than exactly.
+        drop = before - nw.current_total()
+        assert abs(drop - Decimal("145.63")) <= Decimal("1")
+
+
+def test_selling_gold_is_not_taxed(seeded):
+    from app.models import GoldTransaction
+    client = seeded.test_client()
+    client.post("/savings/gold/txn/save", data={
+        "type": "sell", "date": "2026-07-10",
+        "amount": "5000", "price_per_gram": "10000"})
+    with seeded.app_context():
+        t = GoldTransaction.query.order_by(GoldTransaction.id.desc()).first()
+        assert t.type == "sell"
+        assert t.gst_amount == Decimal("0.00")
+        assert t.amount == Decimal("5000.00"), "the proceeds are the proceeds"
+        assert t.grams == Decimal("0.5000")
+
+
+def test_the_gst_rate_is_editable(seeded):
+    """It's 3% today; the field carries the rate rather than assuming it."""
+    from app.models import GoldTransaction
+    client = seeded.test_client()
+    client.post("/savings/gold/txn/save", data={
+        "type": "buy", "date": "2026-07-10", "gst_pct": "5",
+        "amount": "5250", "price_per_gram": "10000"})
+    with seeded.app_context():
+        t = GoldTransaction.query.order_by(GoldTransaction.id.desc()).first()
+        assert t.amount == Decimal("5000.00")       # 5250 / 1.05
+        assert t.gst_amount == Decimal("250.00")
+
+
+def test_gold_summary_separates_what_was_paid_from_what_was_bought(seeded):
+    """Average price is the metal's; P/L is measured against the whole debit."""
+    from app.services import gold as gold_svc
+    from app.models import GoldHolding, GoldTransaction
+    from app.extensions import db
+    client = seeded.test_client()
+    with seeded.app_context():
+        for t in GoldTransaction.query.all():       # start from a clean holding
+            db.session.delete(t)
+        for h in GoldHolding.query.all():
+            db.session.delete(h)
+        db.session.commit()
+
+    client.post("/savings/gold/txn/save", data={
+        "type": "buy", "date": "2026-07-10",
+        "amount": "5000", "price_per_gram": "10000"})
+
+    with seeded.app_context():
+        s = gold_svc.summary()
+        assert s["gst"] == Decimal("145.63")
+        assert s["invested"] == Decimal("5000.00"), "what left the bank"
+        assert s["grams"] == Decimal("0.4854")
+        # The metal's own rate, not 5000/0.4854 — which would be the 10,300 the
+        # tax makes it look like. Within a rupee, since grams are stored at 4dp.
+        assert abs(s["avg_price"] - Decimal("10000")) <= Decimal("1")
 
 
 def test_fd_deducts_principal_once(seeded):

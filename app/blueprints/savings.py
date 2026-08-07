@@ -14,6 +14,7 @@ from ..services import mf as mf_svc
 from ..services import sip as sip_svc
 from ..services import invest_link
 from ..services import accounts as acc_svc
+from ..services import settings as settings_svc
 
 bp = Blueprint("savings", __name__, url_prefix="/savings")
 
@@ -217,25 +218,42 @@ def gold_txn_save():
         db.session.flush()
     f = request.form
     ppg = money(f.get("price_per_gram"))
-    amount = money(f.get("amount"))
+    paid = money(f.get("amount"))
     grams = to_decimal(f.get("grams"), ZERO)
-    # The form asks for the rupee amount now; derive grams = amount ÷ price.
-    # (Fall back to grams × price for older/backfill callers that send grams.)
-    if amount > 0 and ppg > 0:
-        grams = quantize4(amount / ppg)
-    elif grams > 0 and ppg > 0:
-        amount = money(grams * ppg)
-    if amount <= 0 or ppg <= 0:
-        return _trigger({"steward-toast": {"kind": "error", "message": "Enter amount and price."}}, 200)
     gtype = f.get("type") if f.get("type") in ("buy", "sell") else "buy"
+
+    # A digital gold buy is GST-inclusive: the bank debits the round figure the
+    # user typed, and part of it is tax, not metal. So the amount entered is
+    # what leaves the account, and the gold is worth amount ÷ (1 + rate).
+    # Selling attracts no GST — the proceeds are the proceeds.
+    gst_pct = money(f.get("gst_pct")) if f.get("gst_pct") not in (None, "") \
+        else settings_svc.gold_gst_pct()
+    if gtype == "sell" or gst_pct <= 0:
+        gst_pct = ZERO
+    net = money(paid / (1 + gst_pct / 100)) if gst_pct > 0 else paid
+    gst = money(paid - net)
+
+    # The form asks for the rupee amount now; derive grams from the gold value.
+    # (Fall back to grams × price for older/backfill callers that send grams.)
+    if net > 0 and ppg > 0:
+        grams = quantize4(net / ppg)
+    elif grams > 0 and ppg > 0:
+        net = money(grams * ppg)
+        gst = money(net * gst_pct / 100)
+        paid = money(net + gst)
+    if net <= 0 or ppg <= 0:
+        return _trigger({"steward-toast": {"kind": "error", "message": "Enter amount and price."}}, 200)
     t = GoldTransaction(holding_id=holding.id, date=parse_date(f.get("date"), today_ist()),
-                        type=gtype, grams=grams, price_per_gram=ppg, amount=amount,
+                        type=gtype, grams=grams, price_per_gram=ppg, amount=net,
+                        gst_amount=gst,
                         provider=(f.get("provider") or holding.provider))
     db.session.add(t)
     db.session.flush()
+    # Cash moves by the whole debit, GST included; the holding only gained the
+    # metal, so net worth correctly drops by the tax.
     invest_link.sync_cash(
         "gold", t.id, account_id=f.get("account_id", type=int),
-        amount=amount, on=t.date, flow="in" if gtype == "sell" else "out",
+        amount=paid, on=t.date, flow="in" if gtype == "sell" else "out",
         note="Digital gold")
     db.session.commit()
     return _trigger({"steward-refresh": True, "steward-toast": {"kind": "success", "message": "Gold entry added."}})

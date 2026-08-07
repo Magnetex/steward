@@ -1,10 +1,24 @@
-<div x-data="{ open:false, type:'buy', date:'{{ today }}', amt:'', ppg:'{{ gold.rate if gold.rate is not none else "" }}' }">
+<div x-data="{ open:false, type:'buy', date:'{{ today }}', amt:'', gst:'{{ gold_gst_pct }}',
+               ppg:'{{ gold.rate if gold.rate is not none else "" }}',
+               /* A buy is GST-inclusive: the amount typed is what the bank
+                  debits, and the metal is worth that ÷ (1 + rate). */
+               get gstPct() { return this.type === 'sell' ? 0 : (parseFloat(this.gst) || 0); },
+               get paid() { return parseFloat(this.amt) || 0; },
+               get goldValue() { return this.paid / (1 + this.gstPct / 100); },
+               get gstAmount() { return this.paid - this.goldValue; },
+               get grams() { const p = parseFloat(this.ppg) || 0;
+                             return p > 0 ? (this.goldValue / p).toFixed(4) : ''; },
+               inr(v) { return '₹' + v.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2}); } }">
   <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
     <div class="flex gap-6 flex-wrap">
       <div><p class="muted text-xs">Grams held</p><p class="font-display text-2xl money">{{ gold.grams | qty }}</p></div>
       <div><p class="muted text-xs">Avg buy /g</p><p class="font-display text-2xl money">{{ gold.avg_price | inr0 }}</p></div>
       <div><p class="muted text-xs">Current value</p>
         <p class="font-display text-2xl money">{% if gold.value is not none %}{{ gold.value | inr0 }}{% else %}—{% endif %}</p></div>
+      {% if gold.gst > 0 %}
+        <div><p class="muted text-xs">GST paid</p>
+          <p class="font-display text-2xl money">{{ gold.gst | inr0 }}</p></div>
+      {% endif %}
       <div><p class="muted text-xs">P/L</p>
         <p class="font-display text-2xl money {{ 'text-danger' if gold.pl is not none and gold.pl < 0 else 'text-primary' }}">
           {% if gold.pl is not none %}{{ gold.pl | inr0 }}{% if gold.pl_pct is not none %} ({{ gold.pl_pct }}%){% endif %}{% else %}—{% endif %}</p></div>
@@ -37,7 +51,8 @@
           <th class="text-left font-medium px-4 py-2">Type</th>
           <th class="text-right font-medium px-4 py-2">Grams</th>
           <th class="text-right font-medium px-4 py-2">Price/g</th>
-          <th class="text-right font-medium px-4 py-2">Amount</th>
+          <th class="text-right font-medium px-4 py-2">GST</th>
+          <th class="text-right font-medium px-4 py-2">Paid</th>
           <th class="px-2"></th>
         </tr></thead>
         <tbody class="divide-y divide-line">
@@ -47,7 +62,8 @@
               <td class="h-sub px-4 py-2 capitalize">{{ t.type }}</td>
               <td class="px-4 py-2 text-right money" data-label="Grams">{{ t.grams | qty }}</td>
               <td class="px-4 py-2 text-right money" data-label="Price/g">{{ t.price_per_gram | inr0 }}</td>
-              <td class="h-main px-4 py-2 text-right money">{{ t.amount | inr0 }}</td>
+              <td class="px-4 py-2 text-right money" data-label="GST">{{ t.gst_amount | inr0 }}</td>
+              <td class="h-main px-4 py-2 text-right money">{{ t.paid | inr0 }}</td>
               <td class="h-del px-2 text-right">
                 <button class="row-action hover:text-danger"
                         hx-post="{{ url_for('savings.gold_txn_delete', txn_id=t.id) }}"
@@ -81,19 +97,48 @@
           <input type="hidden" name="type" :value="type">
           <div class="grid grid-cols-2 gap-3">
             <div><label class="field-label">Date</label><input name="date" type="date" class="field-input" x-model="date"></div>
-            <div><label class="field-label">Amount (₹)</label><input name="amount" class="field-input money" inputmode="decimal" x-model="amt" placeholder="e.g. 5000"></div>
+            <div>
+              <label class="field-label" x-text="type==='sell' ? 'Amount received (₹)' : 'Amount paid (₹)'"></label>
+              <input name="amount" class="field-input money" inputmode="decimal" x-model="amt" placeholder="e.g. 5000">
+            </div>
             <div><label class="field-label">Price / gram (₹)</label><input name="price_per_gram" class="field-input money" inputmode="decimal" x-model="ppg"></div>
+            <div x-show="type==='buy'">
+              <label class="field-label">GST %</label>
+              <input name="gst_pct" class="field-input money" inputmode="decimal" x-model="gst"
+                     :disabled="type==='sell'">
+            </div>
             <div><label class="field-label">Grams <span class="muted font-normal">(calculated)</span></label>
-              <input name="grams" class="field-input money" inputmode="decimal"
-                     :value="(parseFloat(amt)>0 && parseFloat(ppg)>0) ? (parseFloat(amt)/parseFloat(ppg)).toFixed(4) : ''" readonly></div>
+              <input name="grams" class="field-input money" inputmode="decimal" :value="grams" readonly></div>
           </div>
+
+          {# The split, live: what the bank debits vs what becomes metal. #}
+          <div x-show="paid > 0" x-cloak class="rounded-xl bg-surface-2 px-3 py-2 text-xs space-y-0.5">
+            <div class="flex items-center justify-between">
+              <span class="muted" x-text="type==='sell' ? 'Credited to your account' : 'Debited from your account'"></span>
+              <span class="money font-medium" x-text="inr(paid)"></span>
+            </div>
+            <template x-if="gstPct > 0">
+              <div class="flex items-center justify-between">
+                <span class="muted">GST at <span x-text="gstPct"></span>%</span>
+                <span class="money text-danger" x-text="'− ' + inr(gstAmount)"></span>
+              </div>
+            </template>
+            <div class="flex items-center justify-between border-t border-line pt-0.5 mt-0.5">
+              <span class="muted" x-text="type==='sell' ? 'Gold sold' : 'Gold bought'"></span>
+              <span class="money font-medium" x-text="inr(goldValue)"></span>
+            </div>
+          </div>
+
           <div>
             <label class="field-label" x-text="type==='sell' ? 'Deposit to' : 'Paid from'"></label>
             <select name="account_id" class="field-input">
               <option value="">— skip (already funded) —</option>
               {% for a in cash_accounts %}<option value="{{ a.id }}">{{ a.icon }} {{ a.name }}</option>{% endfor %}
             </select>
-            <p class="text-xs muted mt-1">Deducts (or, on a sell, credits) cash so net worth stays balanced. Leave blank to backfill.</p>
+            <p class="text-xs muted mt-1"
+               x-text="type==='sell'
+                 ? 'Credits the proceeds to this account. Leave blank to backfill.'
+                 : 'Deducts the full amount including GST, so cash matches your bank. Only the gold value is added to the holding — net worth drops by the tax, which is what actually happened.'"></p>
           </div>
         </div>
         <div class="flex justify-end gap-2 px-5 py-3 border-t border-line">

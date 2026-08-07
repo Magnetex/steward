@@ -46,8 +46,18 @@ def current_rate() -> Decimal | None:
 
 
 def summary() -> dict:
+    """Grams held, what they cost, and what they're worth now.
+
+    Two different rupee figures matter and they are not the same once GST is
+    in play: ``bought`` is what the metal cost (it is what buys the grams, so
+    it sets the average price per gram), while ``invested`` is what actually
+    left the bank — gold plus its tax. Measuring P/L against the latter is the
+    honest one: buy ₹5,000 of digital gold and you are genuinely ₹146 down
+    until the rate moves.
+    """
     grams = ZERO
-    bought = ZERO
+    bought = ZERO          # gold value only, net of GST
+    gst = ZERO             # tax paid on top of it
     sold = ZERO
     sold_grams = ZERO
     for h in GoldHolding.query.all():
@@ -57,10 +67,10 @@ def summary() -> dict:
             if t.type == "sell":
                 grams -= g; sold += a; sold_grams += g
             else:
-                grams += g; bought += a
+                grams += g; bought += a; gst += money(t.gst_amount or ZERO)
     bought_grams = grams + sold_grams
     avg_price = (bought / bought_grams).quantize(Decimal("0.01")) if bought_grams > 0 else ZERO
-    net_invested = bought - sold
+    net_invested = bought + gst - sold
     rate = current_rate()
     value = money(grams * rate) if rate is not None else None
     pl = (value - net_invested) if value is not None else None
@@ -68,6 +78,7 @@ def summary() -> dict:
     row = get_cached(MARKET_KEY)
     return {
         "grams": quantize4(grams), "avg_price": avg_price, "invested": money(net_invested),
+        "gst": money(gst),
         "rate": rate, "manual": gold_manual_rate() is not None,
         "value": value, "pl": pl, "pl_pct": pl_pct,
         "as_of": row.as_of if row else None, "rate_ok": (row.ok if row else False) or gold_manual_rate() is not None,

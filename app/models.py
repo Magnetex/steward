@@ -380,9 +380,19 @@ class GoldTransaction(db.Model):
     type = db.Column(db.String(4), nullable=False, default="buy")  # buy | sell
     grams = db.Column(DecimalText, nullable=False, default=ZERO)
     price_per_gram = db.Column(DecimalText, nullable=False, default=ZERO)
+    # What the gold itself cost, net of tax — this is what buys the grams.
     amount = db.Column(DecimalText, nullable=False, default=ZERO)
+    # GST charged on top of that, included in what the bank actually debited.
+    # Buys only: selling digital gold attracts no GST.
+    gst_amount = db.Column(DecimalText, nullable=False, default=ZERO)
     provider = db.Column(db.String(80), default="PhonePe / SafeGold")
     created_at = db.Column(db.DateTime, default=_now)
+
+    @property
+    def paid(self):
+        """What left the bank account: gold value plus its GST."""
+        from .money import money
+        return money(money(self.amount) + money(self.gst_amount or ZERO))
 
 
 # ---------------------------------------------------------------------------

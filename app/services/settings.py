@@ -16,6 +16,9 @@ DEFAULTS: dict[str, str] = {
     "salary_rule_window": "7",         # days at month-end that push income to next month
     "epf_interest_rate": "8.25",       # annual %
     "gold_manual_rate": "",            # INR/gram override; empty = use market fetch
+    # GST charged on a digital gold purchase, included in the amount debited
+    # (3% at Aug 2026: 1.5% CGST + 1.5% SGST, unchanged by the Sept 2025 overhaul).
+    "gold_gst_pct": "3",
     # Capital-gains tax rules (India defaults; user-editable)
     "equity_ltcg_months": "12",
     "equity_ltcg_rate": "12.5",
@@ -50,6 +53,11 @@ def get_int(key: str, default: int = 0) -> int:
 
 def salary_window_days() -> int:
     return get_int("salary_rule_window", 7)
+
+
+def gold_gst_pct() -> Decimal:
+    """GST on a digital gold buy, as a percentage of the pre-tax gold value."""
+    return get_decimal("gold_gst_pct", Decimal("3")) or Decimal("0")
 
 
 def gold_manual_rate() -> Decimal | None:

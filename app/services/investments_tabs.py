@@ -25,8 +25,10 @@ def context_for(tab: str) -> dict:
 def _gold() -> dict:
     holding = GoldHolding.query.first()
     txns = (GoldTransaction.query.order_by(GoldTransaction.date.desc()).all())
+    from .settings import gold_gst_pct
     return {"gold": gold_svc.summary(), "gold_txns": txns,
             "gold_holding_id": holding.id if holding else None,
+            "gold_gst_pct": gold_gst_pct(),
             "today": today_ist().isoformat()}
 
 
